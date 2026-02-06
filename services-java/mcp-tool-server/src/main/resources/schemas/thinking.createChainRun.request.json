@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["sessionId", "userId", "problem"],
+  "properties": {
+    "sessionId": {
+      "type": "string",
+      "description": "Chat session ID"
+    },
+    "userId": {
+      "type": "string",
+      "description": "User ID"
+    },
+    "traceId": {
+      "type": "string",
+      "description": "Trace ID for debugging"
+    },
+    "problem": {
+      "type": "string",
+      "description": "Problem description to think through"
+    }
+  }
+}

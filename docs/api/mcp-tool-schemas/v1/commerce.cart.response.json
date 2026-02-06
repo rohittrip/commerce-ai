@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "ok": {
+      "type": "boolean"
+    },
+    "traceId": {
+      "type": "string"
+    },
+    "data": {
+      "$ref": "./common.types.json#/definitions/Cart"
+    },
+    "error": {
+      "$ref": "./common.types.json#/definitions/ToolError"
+    }
+  },
+  "required": ["ok", "traceId"]
+}

@@ -1,0 +1,779 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schema.ucp.dev/v1/types",
+  "title": "Universal Commerce Protocol - Type Definitions",
+  "description": "UCP-compliant type definitions for commerce operations, optimized for LLM readability and cross-category support",
+  "definitions": {
+    "Money": {
+      "type": "object",
+      "description": "Monetary amount with currency",
+      "properties": {
+        "amount": {
+          "type": "number",
+          "description": "Numeric amount in decimal format"
+        },
+        "currency": {
+          "type": "string",
+          "description": "ISO 4217 currency code (e.g., INR, USD, EUR)",
+          "pattern": "^[A-Z]{3}$",
+          "default": "INR"
+        },
+        "formatted": {
+          "type": "string",
+          "description": "Human-readable formatted amount (e.g., ₹12,749)",
+          "example": "₹12,749"
+        }
+      },
+      "required": ["amount", "currency"]
+    },
+    "Pricing": {
+      "type": "object",
+      "description": "Complete pricing information including discounts and offers",
+      "properties": {
+        "listPrice": {
+          "$ref": "#/definitions/Money",
+          "description": "Original manufacturer's suggested retail price"
+        },
+        "salePrice": {
+          "$ref": "#/definitions/Money",
+          "description": "Current selling price after discounts"
+        },
+        "discount": {
+          "type": "object",
+          "description": "Discount information",
+          "properties": {
+            "amount": {
+              "$ref": "#/definitions/Money",
+              "description": "Absolute discount amount"
+            },
+            "percentage": {
+              "type": "number",
+              "description": "Discount as percentage",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "label": {
+              "type": "string",
+              "description": "Display label for discount (e.g., '39% OFF')"
+            }
+          }
+        },
+        "taxIncluded": {
+          "type": "boolean",
+          "description": "Whether tax is included in the price",
+          "default": true
+        }
+      },
+      "required": ["salePrice"]
+    },
+    "Availability": {
+      "type": "object",
+      "description": "Product availability and stock information",
+      "properties": {
+        "inStock": {
+          "type": "boolean",
+          "description": "Whether product is currently in stock"
+        },
+        "quantity": {
+          "type": "integer",
+          "description": "Available quantity (null if not disclosed)",
+          "minimum": 0
+        },
+        "status": {
+          "type": "string",
+          "description": "Stock status indicator",
+          "enum": ["IN_STOCK", "OUT_OF_STOCK", "LOW_STOCK", "PREORDER", "DISCONTINUED"]
+        },
+        "estimatedDelivery": {
+          "type": "string",
+          "description": "Estimated delivery timeframe (e.g., '2-3 days', 'Next day')"
+        },
+        "fulfillmentOptions": {
+          "type": "array",
+          "description": "Available fulfillment methods",
+          "items": {
+            "type": "string",
+            "enum": ["HOME_DELIVERY", "STORE_PICKUP", "SHIP_FROM_STORE", "SAME_DAY_DELIVERY"]
+          }
+        }
+      },
+      "required": ["inStock", "status"]
+    },
+    "Media": {
+      "type": "object",
+      "description": "Media asset (image, video, etc.)",
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL to the media asset"
+        },
+        "type": {
+          "type": "string",
+          "description": "Media type",
+          "enum": ["image", "video", "3d_model"]
+        },
+        "altText": {
+          "type": "string",
+          "description": "Alternative text for accessibility"
+        },
+        "width": {
+          "type": "integer",
+          "description": "Width in pixels"
+        },
+        "height": {
+          "type": "integer",
+          "description": "Height in pixels"
+        },
+        "primary": {
+          "type": "boolean",
+          "description": "Whether this is the primary/hero image",
+          "default": false
+        }
+      },
+      "required": ["url", "type"]
+    },
+    "Rating": {
+      "type": "object",
+      "description": "Product rating and review information",
+      "properties": {
+        "average": {
+          "type": "number",
+          "description": "Average rating score",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "count": {
+          "type": "integer",
+          "description": "Total number of ratings",
+          "minimum": 0
+        },
+        "distribution": {
+          "type": "object",
+          "description": "Rating distribution by star level",
+          "properties": {
+            "5": {"type": "integer", "minimum": 0},
+            "4": {"type": "integer", "minimum": 0},
+            "3": {"type": "integer", "minimum": 0},
+            "2": {"type": "integer", "minimum": 0},
+            "1": {"type": "integer", "minimum": 0}
+          }
+        }
+      },
+      "required": ["average", "count"]
+    },
+    "Category": {
+      "type": "object",
+      "description": "Product category information",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique category identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable category name"
+        },
+        "path": {
+          "type": "string",
+          "description": "Full category path using dot notation (e.g., 'electronics.mobile.smartphones')"
+        },
+        "breadcrumbs": {
+          "type": "array",
+          "description": "Category hierarchy from root to current",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {"type": "string"},
+              "name": {"type": "string"}
+            }
+          }
+        }
+      },
+      "required": ["id", "name", "path"]
+    },
+    "Brand": {
+      "type": "object",
+      "description": "Brand information",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique brand identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Brand name"
+        },
+        "logoUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Brand logo URL"
+        }
+      },
+      "required": ["name"]
+    },
+    "Tag": {
+      "type": "object",
+      "description": "Product tag or badge",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "Tag display text (e.g., 'LIMITED_TIME_OFFER', 'BESTSELLER')"
+        },
+        "type": {
+          "type": "string",
+          "description": "Tag type for styling",
+          "enum": ["OFFER", "NEW_ARRIVAL", "BESTSELLER", "EXCLUSIVE", "ECO_FRIENDLY", "FEATURED"]
+        },
+        "color": {
+          "type": "string",
+          "description": "Hex color code for tag background",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        }
+      },
+      "required": ["label"]
+    },
+    "Attribute": {
+      "type": "object",
+      "description": "Generic product attribute",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Attribute name (e.g., 'Color', 'Size', 'Storage')"
+        },
+        "value": {
+          "description": "Attribute value (string, number, boolean, or array)",
+          "oneOf": [
+            {"type": "string"},
+            {"type": "number"},
+            {"type": "boolean"},
+            {"type": "array", "items": {"type": "string"}}
+          ]
+        },
+        "unit": {
+          "type": "string",
+          "description": "Unit of measurement (e.g., 'GB', 'inches', 'mAh')"
+        },
+        "displayPriority": {
+          "type": "integer",
+          "description": "Display priority (lower = higher priority)"
+        }
+      },
+      "required": ["name", "value"]
+    },
+    "Variant": {
+      "type": "object",
+      "description": "Product variant (e.g., different colors, sizes)",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Variant product ID"
+        },
+        "attributes": {
+          "type": "object",
+          "description": "Variant-specific attributes (e.g., {color: 'Black', size: '128GB'})",
+          "additionalProperties": true
+        },
+        "pricing": {
+          "$ref": "#/definitions/Pricing",
+          "description": "Variant-specific pricing if different"
+        },
+        "availability": {
+          "$ref": "#/definitions/Availability",
+          "description": "Variant-specific availability"
+        },
+        "sku": {
+          "type": "string",
+          "description": "Stock keeping unit for this variant"
+        }
+      },
+      "required": ["id", "attributes"]
+    },
+    "Specification": {
+      "type": "object",
+      "description": "Technical specification group",
+      "properties": {
+        "category": {
+          "type": "string",
+          "description": "Specification category (e.g., 'Display', 'Battery', 'Camera')"
+        },
+        "items": {
+          "type": "array",
+          "description": "Specification items in this category",
+          "items": {
+            "$ref": "#/definitions/Attribute"
+          }
+        }
+      },
+      "required": ["category", "items"]
+    },
+    "ProductSummary": {
+      "type": "object",
+      "description": "Lightweight product representation for search results and lists",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique product identifier from the provider"
+        },
+        "provider": {
+          "type": "string",
+          "description": "Commerce provider identifier (e.g., 'reliance_digital', 'mock')"
+        },
+        "sku": {
+          "type": "string",
+          "description": "Stock keeping unit / product code"
+        },
+        "name": {
+          "type": "string",
+          "description": "Product name/title"
+        },
+        "shortDescription": {
+          "type": "string",
+          "description": "Brief product description (1-2 sentences)"
+        },
+        "brand": {
+          "$ref": "#/definitions/Brand",
+          "description": "Product brand information"
+        },
+        "category": {
+          "$ref": "#/definitions/Category",
+          "description": "Product category"
+        },
+        "pricing": {
+          "$ref": "#/definitions/Pricing",
+          "description": "Pricing information"
+        },
+        "primaryImage": {
+          "$ref": "#/definitions/Media",
+          "description": "Primary product image"
+        },
+        "availability": {
+          "$ref": "#/definitions/Availability",
+          "description": "Availability status"
+        },
+        "rating": {
+          "$ref": "#/definitions/Rating",
+          "description": "Rating and review summary"
+        },
+        "tags": {
+          "type": "array",
+          "description": "Product tags and badges",
+          "items": {
+            "$ref": "#/definitions/Tag"
+          }
+        },
+        "keyAttributes": {
+          "type": "array",
+          "description": "Key attributes to display in summary (e.g., storage, color)",
+          "items": {
+            "$ref": "#/definitions/Attribute"
+          },
+          "maxItems": 5
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Product page URL"
+        }
+      },
+      "required": ["id", "provider", "name", "pricing", "availability"]
+    },
+    "ProductDetails": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/ProductSummary"
+        },
+        {
+          "type": "object",
+          "description": "Complete product details with full information",
+          "properties": {
+            "longDescription": {
+              "type": "string",
+              "description": "Detailed product description with features and benefits"
+            },
+            "media": {
+              "type": "array",
+              "description": "All product media (images, videos)",
+              "items": {
+                "$ref": "#/definitions/Media"
+              }
+            },
+            "specifications": {
+              "type": "array",
+              "description": "Organized technical specifications",
+              "items": {
+                "$ref": "#/definitions/Specification"
+              }
+            },
+            "variants": {
+              "type": "array",
+              "description": "Product variants",
+              "items": {
+                "$ref": "#/definitions/Variant"
+              }
+            },
+            "warranty": {
+              "type": "object",
+              "description": "Warranty information",
+              "properties": {
+                "duration": {
+                  "type": "string",
+                  "description": "Warranty duration (e.g., '1 Year', '2 Years')"
+                },
+                "type": {
+                  "type": "string",
+                  "description": "Warranty type (e.g., 'Manufacturer', 'Extended')"
+                },
+                "details": {
+                  "type": "string",
+                  "description": "Warranty terms and conditions"
+                }
+              }
+            },
+            "shipping": {
+              "type": "object",
+              "description": "Shipping information",
+              "properties": {
+                "freeShipping": {
+                  "type": "boolean",
+                  "description": "Whether free shipping is available"
+                },
+                "estimatedDays": {
+                  "type": "integer",
+                  "description": "Estimated delivery days"
+                },
+                "restrictions": {
+                  "type": "array",
+                  "description": "Shipping restrictions",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "seo": {
+              "type": "object",
+              "description": "SEO metadata",
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "description": "SEO title"
+                },
+                "description": {
+                  "type": "string",
+                  "description": "SEO meta description"
+                },
+                "keywords": {
+                  "type": "array",
+                  "description": "SEO keywords",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "metadata": {
+              "type": "object",
+              "description": "Additional provider-specific metadata",
+              "additionalProperties": true
+            }
+          }
+        }
+      ]
+    },
+    "CartItem": {
+      "type": "object",
+      "description": "Item in shopping cart",
+      "properties": {
+        "productId": {
+          "type": "string",
+          "description": "Product identifier"
+        },
+        "variantId": {
+          "type": "string",
+          "description": "Variant identifier if applicable"
+        },
+        "provider": {
+          "type": "string",
+          "description": "Commerce provider"
+        },
+        "quantity": {
+          "type": "integer",
+          "description": "Quantity in cart",
+          "minimum": 1
+        },
+        "unitPrice": {
+          "$ref": "#/definitions/Money",
+          "description": "Price per unit"
+        },
+        "totalPrice": {
+          "$ref": "#/definitions/Money",
+          "description": "Total price for this line item (unitPrice * quantity)"
+        },
+        "product": {
+          "$ref": "#/definitions/ProductSummary",
+          "description": "Product information snapshot"
+        }
+      },
+      "required": ["productId", "provider", "quantity", "unitPrice"]
+    },
+    "Cart": {
+      "type": "object",
+      "description": "Shopping cart",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Cart identifier"
+        },
+        "userId": {
+          "type": "string",
+          "description": "User identifier"
+        },
+        "items": {
+          "type": "array",
+          "description": "Cart items",
+          "items": {
+            "$ref": "#/definitions/CartItem"
+          }
+        },
+        "subtotal": {
+          "$ref": "#/definitions/Money",
+          "description": "Subtotal before discounts and tax"
+        },
+        "discount": {
+          "$ref": "#/definitions/Money",
+          "description": "Total discount amount"
+        },
+        "tax": {
+          "$ref": "#/definitions/Money",
+          "description": "Tax amount"
+        },
+        "total": {
+          "$ref": "#/definitions/Money",
+          "description": "Final total amount"
+        },
+        "currency": {
+          "type": "string",
+          "description": "Cart currency",
+          "default": "INR"
+        },
+        "itemCount": {
+          "type": "integer",
+          "description": "Total number of items",
+          "minimum": 0
+        }
+      },
+      "required": ["id", "items", "total", "currency", "itemCount"]
+    },
+    "Address": {
+      "type": "object",
+      "description": "Physical address",
+      "properties": {
+        "line1": {
+          "type": "string",
+          "description": "Address line 1 (street address)"
+        },
+        "line2": {
+          "type": "string",
+          "description": "Address line 2 (apartment, suite, etc.)"
+        },
+        "city": {
+          "type": "string",
+          "description": "City"
+        },
+        "state": {
+          "type": "string",
+          "description": "State or province"
+        },
+        "pincode": {
+          "type": "string",
+          "description": "Postal/ZIP code"
+        },
+        "country": {
+          "type": "string",
+          "description": "ISO 3166-1 alpha-2 country code",
+          "pattern": "^[A-Z]{2}$"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Contact phone number"
+        }
+      },
+      "required": ["line1", "city", "pincode", "country"]
+    },
+    "Order": {
+      "type": "object",
+      "description": "Customer order",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Order identifier"
+        },
+        "userId": {
+          "type": "string",
+          "description": "User identifier"
+        },
+        "provider": {
+          "type": "string",
+          "description": "Commerce provider"
+        },
+        "providerOrderId": {
+          "type": "string",
+          "description": "Provider's order reference number"
+        },
+        "status": {
+          "type": "string",
+          "description": "Order status",
+          "enum": ["PENDING", "CONFIRMED", "PROCESSING", "SHIPPED", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED", "REFUNDED"]
+        },
+        "items": {
+          "type": "array",
+          "description": "Order items",
+          "items": {
+            "$ref": "#/definitions/CartItem"
+          }
+        },
+        "subtotal": {
+          "$ref": "#/definitions/Money",
+          "description": "Subtotal amount"
+        },
+        "discount": {
+          "$ref": "#/definitions/Money",
+          "description": "Discount amount"
+        },
+        "tax": {
+          "$ref": "#/definitions/Money",
+          "description": "Tax amount"
+        },
+        "shipping": {
+          "$ref": "#/definitions/Money",
+          "description": "Shipping cost"
+        },
+        "total": {
+          "$ref": "#/definitions/Money",
+          "description": "Total order amount"
+        },
+        "paymentMethod": {
+          "type": "string",
+          "description": "Payment method used",
+          "enum": ["COD", "CARD", "UPI", "WALLET", "NET_BANKING", "EMI"]
+        },
+        "shippingAddress": {
+          "$ref": "#/definitions/Address",
+          "description": "Delivery address"
+        },
+        "billingAddress": {
+          "$ref": "#/definitions/Address",
+          "description": "Billing address"
+        },
+        "tracking": {
+          "type": "object",
+          "description": "Shipment tracking information",
+          "properties": {
+            "trackingNumber": {
+              "type": "string",
+              "description": "Tracking number"
+            },
+            "carrier": {
+              "type": "string",
+              "description": "Shipping carrier"
+            },
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "description": "Tracking URL"
+            }
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Order creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update timestamp"
+        }
+      },
+      "required": ["id", "status", "items", "total", "paymentMethod"]
+    },
+    "ToolResponse": {
+      "type": "object",
+      "description": "Standard tool response wrapper",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "description": "Whether the operation succeeded"
+        },
+        "traceId": {
+          "type": "string",
+          "description": "Unique trace identifier for debugging"
+        },
+        "data": {
+          "type": "object",
+          "description": "Response data (structure varies by tool)"
+        },
+        "error": {
+          "$ref": "#/definitions/ToolError",
+          "description": "Error information if ok=false"
+        }
+      },
+      "required": ["ok", "traceId"]
+    },
+    "ToolError": {
+      "type": "object",
+      "description": "Error information",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Error code",
+          "enum": ["VALIDATION_ERROR", "PROVIDER_ERROR", "NOT_FOUND", "TIMEOUT", "RATE_LIMIT", "INTERNAL_ERROR", "UNAUTHORIZED"]
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable error message"
+        },
+        "details": {
+          "type": "object",
+          "description": "Additional error context",
+          "additionalProperties": true
+        },
+        "provider": {
+          "type": "string",
+          "description": "Provider that generated the error"
+        }
+      },
+      "required": ["code", "message"]
+    },
+    "Pagination": {
+      "type": "object",
+      "description": "Pagination information",
+      "properties": {
+        "page": {
+          "type": "integer",
+          "description": "Current page number (1-indexed)",
+          "minimum": 1,
+          "default": 1
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Items per page",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        },
+        "total": {
+          "type": "integer",
+          "description": "Total number of items across all pages",
+          "minimum": 0
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "Whether more pages are available"
+        }
+      },
+      "required": ["page", "limit", "total"]
+    }
+  }
+}

@@ -1,0 +1,296 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "Money": {
+      "type": "object",
+      "properties": {
+        "amount": {
+          "type": "number",
+          "description": "Amount in decimal format"
+        },
+        "currency": {
+          "type": "string",
+          "description": "ISO 4217 currency code",
+          "default": "INR"
+        }
+      },
+      "required": ["amount", "currency"]
+    },
+    "Availability": {
+      "type": "object",
+      "properties": {
+        "inStock": {
+          "type": "boolean"
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "status": {
+          "type": "string",
+          "enum": ["IN_STOCK", "OUT_OF_STOCK", "LOW_STOCK", "PREORDER"]
+        }
+      },
+      "required": ["inStock", "status"]
+    },
+    "ProductSummary": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "brand": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "price": {
+          "$ref": "#/definitions/Money"
+        },
+        "imageUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "availability": {
+          "$ref": "#/definitions/Availability"
+        },
+        "rating": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "reviewCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "attributes": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": ["id", "provider", "name", "price", "availability"]
+    },
+    "ProductDetails": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/ProductSummary"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "longDescription": {
+              "type": "string"
+            },
+            "specifications": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "images": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uri"
+              }
+            },
+            "variants": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "CartItem": {
+      "type": "object",
+      "properties": {
+        "productId": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "unitPrice": {
+          "$ref": "#/definitions/Money"
+        },
+        "product": {
+          "$ref": "#/definitions/ProductSummary"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": ["productId", "quantity", "unitPrice"]
+    },
+    "Cart": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CartItem"
+          }
+        },
+        "subtotal": {
+          "$ref": "#/definitions/Money"
+        },
+        "tax": {
+          "$ref": "#/definitions/Money"
+        },
+        "total": {
+          "$ref": "#/definitions/Money"
+        },
+        "currency": {
+          "type": "string",
+          "default": "INR"
+        },
+        "itemCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": ["id", "items", "total", "currency", "itemCount"]
+    },
+    "Order": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "providerOrderId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["PENDING", "CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED", "REFUNDED"]
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CartItem"
+          }
+        },
+        "total": {
+          "$ref": "#/definitions/Money"
+        },
+        "paymentMethod": {
+          "type": "string",
+          "enum": ["COD", "CARD", "UPI", "WALLET"]
+        },
+        "shippingAddress": {
+          "type": "object",
+          "properties": {
+            "line1": {"type": "string"},
+            "line2": {"type": "string"},
+            "city": {"type": "string"},
+            "state": {"type": "string"},
+            "pincode": {"type": "string"},
+            "country": {"type": "string"}
+          },
+          "required": ["line1", "city", "pincode"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "status", "items", "total", "paymentMethod"]
+    },
+    "ToolResponse": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "traceId": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object"
+        },
+        "error": {
+          "$ref": "#/definitions/ToolError"
+        }
+      },
+      "required": ["ok", "traceId"]
+    },
+    "ToolError": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": ["VALIDATION_ERROR", "PROVIDER_ERROR", "NOT_FOUND", "TIMEOUT", "RATE_LIMIT", "INTERNAL_ERROR"]
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "provider": {
+          "type": "string"
+        }
+      },
+      "required": ["code", "message"]
+    },
+    "Pagination": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "hasMore": {
+          "type": "boolean"
+        }
+      },
+      "required": ["page", "limit"]
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "userId": {
+      "type": "string"
+    },
+    "productId": {
+      "type": "string"
+    },
+    "idempotencyKey": {
+      "type": "string"
+    }
+  },
+  "required": ["userId", "productId"]
+}

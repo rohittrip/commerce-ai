@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["runId"],
+  "properties": {
+    "runId": {
+      "type": "string",
+      "description": "Chain run ID"
+    },
+    "status": {
+      "type": "string",
+      "description": "Final status (completed or failed)",
+      "default": "completed"
+    }
+  }
+}

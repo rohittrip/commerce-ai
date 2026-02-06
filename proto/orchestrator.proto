@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package commerce.ai.orchestrator;
+
+// Orchestrator service: BFF calls this (and in future Orchestrator can call BFF via BffService).
+service Orchestrator {
+  // Process user message; server streams JSON chunks (same shape as current SSE).
+  rpc ProcessMessage(ProcessMessageRequest) returns (stream ProcessChunk);
+
+  // Execute a tool (e.g. test-tool from admin).
+  rpc TestTool(TestToolRequest) returns (TestToolResponse);
+}
+
+message ProcessMessageRequest {
+  string session_id = 1;
+  string user_id = 2;
+  string message = 3;
+  optional string trace_id = 4;
+}
+
+// Each chunk is a JSON string matching current SSE event payload (type, content, etc.).
+message ProcessChunk {
+  string json = 1;
+}
+
+message TestToolRequest {
+  string tool_name = 1;
+  string arguments_json = 2;  // JSON object as string
+  optional string trace_id = 3;
+}
+
+message TestToolResponse {
+  bool success = 1;
+  string result_json = 2;  // JSON response or error message
+  optional string error = 3;
+}

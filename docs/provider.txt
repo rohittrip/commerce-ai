@@ -1,0 +1,40 @@
+Provider Integration Mapping Strategy (Must Implement)
+Canonical Contract First
+
+Define canonical types:
+
+ProductSummary
+
+ProductDetails (optional)
+
+Money
+
+Availability
+
+Cart
+
+Order
+
+ToolError
+
+Adapter Pattern
+
+Each provider has:
+
+generated client from provider OpenAPI (preferred)
+
+mapper: provider ↔ canonical
+
+error translator: provider errors → ToolError
+
+capability flags: search/details/cart/order supported
+
+Multi-provider merge (for search)
+
+call providers in parallel (limited concurrency)
+
+normalize to canonical ProductSummary
+
+dedupe by: (UPC/EAN) else (brand+model+storage+color heuristic)
+
+return merged list with provider field retained

@@ -1,0 +1,2487 @@
+openapi: 3.0.3
+info:
+  title: Commerce AI - MCP Tool Server API
+  description: |
+    Unified Commerce Platform (UCP) Tool Server API providing AI-orchestrated e-commerce capabilities.
+
+    This API follows the Model Context Protocol (MCP) pattern for tool execution with multi-provider support.
+    All responses use a standardized ToolResponse wrapper with `ok`, `data`, and `error` fields.
+
+    ## Key Features
+    - Multi-provider aggregation (Amazon, Flipkart, Reliance Digital, etc.)
+    - Dynamic field mapping per provider
+    - Request validation with JSON Schema
+    - Trace ID correlation for debugging
+    - Caching support with configurable TTL
+
+    ## Error Codes
+    - `VALIDATION_ERROR`: Invalid request parameters
+    - `PROVIDER_ERROR`: Provider communication failure
+    - `NOT_FOUND`: Resource not found
+    - `TIMEOUT`: Request timeout
+    - `RATE_LIMIT`: Rate limit exceeded
+    - `INTERNAL_ERROR`: Internal server error
+  version: 1.0.0
+  contact:
+    name: Commerce AI Team
+    email: commerce-ai@acme.com
+  license:
+    name: Proprietary
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local development
+  - url: https://mcp.commerce-ai.acme.com/api/v1
+    description: Production
+
+tags:
+  - name: Search
+    description: Product search and discovery
+  - name: Product
+    description: Product details and catalog
+  - name: Compare
+    description: Product comparison
+  - name: Provider
+    description: Provider discovery and management
+  - name: Catalog
+    description: Category and catalog operations
+  - name: Cart
+    description: Shopping cart management
+  - name: Order
+    description: Order creation and tracking
+  - name: Recommendations
+    description: Personalized recommendations
+  - name: Reviews
+    description: Product reviews and ratings
+
+paths:
+  /tools/execute/commerce.searchProducts:
+    post:
+      tags:
+        - Search
+      summary: Search products across providers
+      description: |
+        Multi-provider product search with aggregation, deduplication, and sorting.
+        Results are merged from all enabled providers with SEARCH capability.
+
+        **Caching**: Results cached for 1 hour by default (configurable via `cacheControl`).
+
+        **Provider Selection**: Only providers with `SEARCH` capability and tool-level enablement are queried.
+      operationId: searchProducts
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+        - $ref: '#/components/parameters/CacheControl'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchProductsRequest'
+            examples:
+              basicSearch:
+                summary: Basic text search
+                value:
+                  query: "wireless headphones"
+                  pagination:
+                    page: 1
+                    limit: 20
+              filteredSearch:
+                summary: Search with filters
+                value:
+                  query: "laptop"
+                  filters:
+                    brand: "Dell"
+                    category: "electronics.computers.laptops"
+                    priceMin: 50000
+                    priceMax: 100000
+                    inStock: true
+                  sortBy: "price_asc"
+                  pagination:
+                    page: 1
+                    limit: 10
+              categoryBrowse:
+                summary: Browse by category
+                value:
+                  query: ""
+                  filters:
+                    category: "fashion.men.shirts"
+                  sortBy: "rating"
+                  pagination:
+                    page: 1
+                    limit: 50
+              relianceDigitalMobiles:
+                summary: Search mobiles on Reliance Digital
+                value:
+                  query: "mobile phone"
+                  filters:
+                    provider: "reliancedigital"
+                    category: "electronics.mobile.smartphones"
+                  pagination:
+                    page: 1
+                    limit: 10
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchProductsResponse'
+              examples:
+                success:
+                  $ref: '#/components/examples/SearchProductsSuccess'
+                noResults:
+                  $ref: '#/components/examples/SearchProductsEmpty'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /tools/execute/commerce.getProductById:
+    post:
+      tags:
+        - Product
+      summary: Get detailed product information
+      description: |
+        Retrieves full product details including all attributes specific to the product's category.
+
+        **Category-specific attributes**: Returns different attribute sets based on product category:
+        - Electronics: specs, warranty, power consumption
+        - Fashion: size chart, material, care instructions
+        - Home: dimensions, weight, assembly required
+
+        **Caching**: Results cached for 1 hour by default.
+      operationId: getProductById
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+        - $ref: '#/components/parameters/CacheControl'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GetProductByIdRequest'
+            examples:
+              basic:
+                summary: Get product by ID
+                value:
+                  productId: "prod_abc123"
+                  provider: "amazon"
+              withOptions:
+                summary: Get product with variant options
+                value:
+                  productId: "prod_xyz789"
+                  provider: "flipkart"
+                  includeVariants: true
+                  includeReviews: true
+                  reviewLimit: 5
+      responses:
+        '200':
+          description: Product details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetProductByIdResponse'
+              examples:
+                electronics:
+                  $ref: '#/components/examples/ProductDetailsElectronics'
+                fashion:
+                  $ref: '#/components/examples/ProductDetailsFashion'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /tools/execute/commerce.compareProducts:
+    post:
+      tags:
+        - Compare
+      summary: Compare multiple products
+      description: |
+        Side-by-side comparison of 2-5 products with feature matrix and AI-generated recommendation.
+
+        **Comparison Matrix**: Builds a structured comparison across:
+        - Price, brand, rating, availability
+        - Category-specific attributes
+        - Pros and cons summary
+
+        **Recommendation**: AI-generated recommendation based on value, rating, and availability.
+      operationId: compareProducts
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompareProductsRequest'
+            examples:
+              twoProducts:
+                summary: Compare two products
+                value:
+                  productIds:
+                    - "prod_abc123"
+                    - "prod_def456"
+              multipleProducts:
+                summary: Compare multiple products
+                value:
+                  productIds:
+                    - "prod_laptop_001"
+                    - "prod_laptop_002"
+                    - "prod_laptop_003"
+                  comparisonFields:
+                    - "price"
+                    - "brand"
+                    - "specs.processor"
+                    - "specs.ram"
+                    - "specs.storage"
+      responses:
+        '200':
+          description: Comparison results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompareProductsResponse'
+              examples:
+                success:
+                  $ref: '#/components/examples/CompareProductsSuccess'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /tools/execute/commerce.findProvidersByCategory:
+    post:
+      tags:
+        - Provider
+      summary: Find providers by category
+      description: |
+        Discover available providers for a specific product category.
+
+        **Use Cases**:
+        - Determine which providers to query for a category
+        - Check provider availability and capabilities
+        - Get provider-specific category mappings
+
+        **Category Format**: Dot-separated hierarchical path (e.g., "electronics.mobile.smartphones")
+      operationId: findProvidersByCategory
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+        - $ref: '#/components/parameters/CacheControl'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FindProvidersByCategoryRequest'
+            examples:
+              singleCategory:
+                summary: Find providers for electronics
+                value:
+                  category: "electronics"
+              nestedCategory:
+                summary: Find providers for nested category
+                value:
+                  category: "electronics.mobile.smartphones"
+                  capabilities:
+                    - "SEARCH"
+                    - "DETAILS"
+                    - "CART"
+      responses:
+        '200':
+          description: Provider list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FindProvidersByCategoryResponse'
+              examples:
+                success:
+                  $ref: '#/components/examples/FindProvidersByCategorySuccess'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /tools/execute/commerce.getCatalogByCategory:
+    post:
+      tags:
+        - Catalog
+      summary: Get catalog structure by category
+      description: |
+        Retrieve category taxonomy and catalog structure. Supports nested categories with dot notation.
+
+        **Category Path Format**:
+        - Root level: `"electronics"`, `"fashion"`, `"home"`
+        - Nested: `"electronics.mobile"`, `"fashion.men.shirts"`
+
+        **Response includes**:
+        - Subcategories with product counts
+        - Category attributes/facets for filtering
+        - Popular brands in category
+        - Price ranges
+      operationId: getCatalogByCategory
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+        - $ref: '#/components/parameters/CacheControl'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GetCatalogByCategoryRequest'
+            examples:
+              rootCategory:
+                summary: Get root category
+                value:
+                  category: "electronics"
+              nestedCategory:
+                summary: Get nested category
+                value:
+                  category: "electronics.mobile.smartphones"
+                  depth: 2
+                  includeFacets: true
+                  includeTopBrands: true
+      responses:
+        '200':
+          description: Catalog structure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetCatalogByCategoryResponse'
+              examples:
+                success:
+                  $ref: '#/components/examples/GetCatalogByCategorySuccess'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /tools/execute/commerce.cart.addItem:
+    post:
+      tags:
+        - Cart
+      summary: Add item to cart
+      description: |
+        Add a product to the user's shopping cart.
+
+        **Idempotency**: Uses `idempotencyKey` to prevent duplicate additions on network retries.
+
+        **Provider Routing**: Item is added to the cart of the product's originating provider.
+      operationId: cartAddItem
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CartAddItemRequest'
+            examples:
+              basic:
+                summary: Add single item
+                value:
+                  userId: "user_123"
+                  productId: "prod_abc123"
+                  provider: "amazon"
+                  quantity: 1
+              withIdempotency:
+                summary: Add with idempotency key
+                value:
+                  userId: "user_123"
+                  productId: "prod_abc123"
+                  provider: "amazon"
+                  quantity: 2
+                  idempotencyKey: "add_prod_abc123_1706745600"
+      responses:
+        '200':
+          description: Updated cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartResponse'
+              examples:
+                success:
+                  $ref: '#/components/examples/CartSuccess'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /tools/execute/commerce.cart.updateItemQty:
+    post:
+      tags:
+        - Cart
+      summary: Update cart item quantity
+      description: |
+        Update the quantity of an item in the cart.
+
+        Set quantity to 0 to remove the item (or use removeItem endpoint).
+      operationId: cartUpdateItemQty
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CartUpdateItemRequest'
+            examples:
+              increase:
+                summary: Increase quantity
+                value:
+                  userId: "user_123"
+                  productId: "prod_abc123"
+                  quantity: 3
+              decrease:
+                summary: Decrease quantity
+                value:
+                  userId: "user_123"
+                  productId: "prod_abc123"
+                  quantity: 1
+      responses:
+        '200':
+          description: Updated cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /tools/execute/commerce.cart.removeItem:
+    post:
+      tags:
+        - Cart
+      summary: Remove item from cart
+      description: Remove a product from the user's shopping cart.
+      operationId: cartRemoveItem
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CartRemoveItemRequest'
+            examples:
+              basic:
+                summary: Remove item
+                value:
+                  userId: "user_123"
+                  productId: "prod_abc123"
+      responses:
+        '200':
+          description: Updated cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /tools/execute/commerce.cart.getCart:
+    post:
+      tags:
+        - Cart
+      summary: Get user's cart
+      description: |
+        Retrieve the current state of the user's shopping cart.
+
+        **Multi-provider carts**: If user has items from multiple providers,
+        returns a unified cart view with provider attribution.
+      operationId: cartGetCart
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CartGetRequest'
+            examples:
+              basic:
+                summary: Get cart
+                value:
+                  userId: "user_123"
+      responses:
+        '200':
+          description: Cart contents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartResponse'
+              examples:
+                withItems:
+                  $ref: '#/components/examples/CartSuccess'
+                empty:
+                  $ref: '#/components/examples/CartEmpty'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /tools/execute/commerce.order.createOrder:
+    post:
+      tags:
+        - Order
+      summary: Create order from cart
+      description: |
+        Convert shopping cart to an order and initiate checkout.
+
+        **Payment**: Supports COD, UPI, Credit Card, Net Banking.
+
+        **Idempotency**: Required - prevents duplicate orders on network retries.
+      operationId: orderCreate
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+            examples:
+              cod:
+                summary: Cash on delivery order
+                value:
+                  userId: "user_123"
+                  cartId: "cart_456"
+                  shippingAddress:
+                    line1: "123 MG Road"
+                    line2: "Apt 4B"
+                    city: "Bangalore"
+                    state: "Karnataka"
+                    postalCode: "560001"
+                    country: "IN"
+                  paymentMethod: "COD"
+                  idempotencyKey: "order_cart_456_1706745600"
+              upi:
+                summary: UPI payment order
+                value:
+                  userId: "user_123"
+                  cartId: "cart_456"
+                  shippingAddress:
+                    line1: "456 Park Street"
+                    city: "Mumbai"
+                    state: "Maharashtra"
+                    postalCode: "400001"
+                    country: "IN"
+                  paymentMethod: "UPI"
+                  paymentDetails:
+                    upiId: "user@paytm"
+                  idempotencyKey: "order_cart_456_1706745601"
+      responses:
+        '200':
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateOrderResponse'
+              examples:
+                success:
+                  $ref: '#/components/examples/OrderCreateSuccess'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          description: Duplicate order (idempotency key already used)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolResponseError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /tools/execute/commerce.order.getOrderStatus:
+    post:
+      tags:
+        - Order
+      summary: Get order status
+      description: |
+        Retrieve current status and tracking information for an order.
+
+        **Status values**: PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED
+      operationId: orderGetStatus
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GetOrderStatusRequest'
+            examples:
+              basic:
+                summary: Get order status
+                value:
+                  userId: "user_123"
+                  orderId: "order_789"
+      responses:
+        '200':
+          description: Order status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetOrderStatusResponse'
+              examples:
+                shipped:
+                  $ref: '#/components/examples/OrderStatusShipped'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /tools/execute/commerce.getRecommendations:
+    post:
+      tags:
+        - Recommendations
+      summary: Get personalized recommendations
+      description: |
+        Get AI-powered product recommendations based on user context.
+
+        **Recommendation Types**:
+        - `similar`: Products similar to given product
+        - `complementary`: Products that go well together (e.g., phone + case)
+        - `trending`: Popular products in category
+        - `personalized`: Based on user history and preferences
+        - `deals`: Best deals in category
+      operationId: getRecommendations
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+        - $ref: '#/components/parameters/CacheControl'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GetRecommendationsRequest'
+            examples:
+              similar:
+                summary: Similar products
+                value:
+                  userId: "user_123"
+                  recommendationType: "similar"
+                  contextProductId: "prod_abc123"
+                  limit: 5
+              personalized:
+                summary: Personalized recommendations
+                value:
+                  userId: "user_123"
+                  recommendationType: "personalized"
+                  category: "electronics"
+                  limit: 10
+              complementary:
+                summary: Complementary products
+                value:
+                  userId: "user_123"
+                  recommendationType: "complementary"
+                  contextProductId: "prod_phone_001"
+                  limit: 5
+      responses:
+        '200':
+          description: Recommendations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetRecommendationsResponse'
+              examples:
+                success:
+                  $ref: '#/components/examples/RecommendationsSuccess'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /tools/execute/commerce.getProductReviews:
+    post:
+      tags:
+        - Reviews
+      summary: Get product reviews
+      description: |
+        Retrieve reviews and ratings for a product.
+
+        **Features**:
+        - Filter by rating (1-5 stars)
+        - Sort by date, helpfulness, or rating
+        - Includes review summary with pros/cons
+      operationId: getProductReviews
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+        - $ref: '#/components/parameters/CacheControl'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GetProductReviewsRequest'
+            examples:
+              basic:
+                summary: Get reviews
+                value:
+                  productId: "prod_abc123"
+                  provider: "amazon"
+                  pagination:
+                    page: 1
+                    limit: 10
+              filtered:
+                summary: Get positive reviews
+                value:
+                  productId: "prod_abc123"
+                  provider: "amazon"
+                  minRating: 4
+                  sortBy: "helpful"
+                  pagination:
+                    page: 1
+                    limit: 20
+      responses:
+        '200':
+          description: Product reviews
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetProductReviewsResponse'
+              examples:
+                success:
+                  $ref: '#/components/examples/ProductReviewsSuccess'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /tools/execute/commerce.checkAvailability:
+    post:
+      tags:
+        - Product
+      summary: Check product availability
+      description: |
+        Check real-time availability and delivery estimates for a product at a location.
+
+        **Returns**:
+        - Stock status (in stock, limited, out of stock)
+        - Available quantity
+        - Delivery estimates
+        - Nearby store availability (if applicable)
+      operationId: checkAvailability
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckAvailabilityRequest'
+            examples:
+              basic:
+                summary: Check availability
+                value:
+                  productId: "prod_abc123"
+                  provider: "amazon"
+                  postalCode: "560001"
+              withQuantity:
+                summary: Check specific quantity
+                value:
+                  productId: "prod_abc123"
+                  provider: "flipkart"
+                  postalCode: "400001"
+                  quantity: 5
+      responses:
+        '200':
+          description: Availability info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckAvailabilityResponse'
+              examples:
+                inStock:
+                  $ref: '#/components/examples/AvailabilityInStock'
+                limited:
+                  $ref: '#/components/examples/AvailabilityLimited'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  parameters:
+    TraceId:
+      name: X-Trace-Id
+      in: header
+      description: Unique trace ID for request correlation
+      required: false
+      schema:
+        type: string
+        format: uuid
+        example: "550e8400-e29b-41d4-a716-446655440000"
+    CacheControl:
+      name: X-Cache-Control
+      in: header
+      description: Cache control directive (default 3600 seconds)
+      required: false
+      schema:
+        type: string
+        enum: ["no-cache", "max-age=300", "max-age=3600", "max-age=86400"]
+        default: "max-age=3600"
+
+  schemas:
+    # Common schemas
+    Money:
+      type: object
+      required:
+        - amount
+        - currency
+      properties:
+        amount:
+          type: number
+          format: decimal
+          description: Amount value
+          example: 49999.00
+        currency:
+          type: string
+          description: ISO 4217 currency code
+          example: "INR"
+          default: "INR"
+
+    Availability:
+      type: object
+      required:
+        - inStock
+        - status
+      properties:
+        inStock:
+          type: boolean
+          description: Whether item is in stock
+        quantity:
+          type: integer
+          description: Available quantity (if disclosed)
+          nullable: true
+        status:
+          type: string
+          enum: [IN_STOCK, OUT_OF_STOCK, LOW_STOCK, PREORDER]
+          description: Stock status
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          minimum: 1
+          default: 1
+          description: Page number (1-indexed)
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+          description: Items per page
+
+    PaginationResponse:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 150
+        hasMore:
+          type: boolean
+          example: true
+
+    Address:
+      type: object
+      required:
+        - line1
+        - city
+        - state
+        - postalCode
+        - country
+      properties:
+        line1:
+          type: string
+          description: Street address line 1
+          example: "123 MG Road"
+        line2:
+          type: string
+          description: Street address line 2
+          example: "Apt 4B"
+        city:
+          type: string
+          description: City
+          example: "Bangalore"
+        state:
+          type: string
+          description: State/Province
+          example: "Karnataka"
+        postalCode:
+          type: string
+          description: Postal/ZIP code
+          example: "560001"
+        country:
+          type: string
+          description: ISO 3166-1 alpha-2 country code
+          example: "IN"
+          default: "IN"
+
+    ToolError:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          enum: [VALIDATION_ERROR, PROVIDER_ERROR, NOT_FOUND, TIMEOUT, RATE_LIMIT, INTERNAL_ERROR]
+        message:
+          type: string
+          description: Human-readable error message
+        details:
+          type: object
+          additionalProperties: true
+          description: Additional error context
+        provider:
+          type: string
+          description: Provider that caused the error (if applicable)
+
+    ToolResponseError:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: false
+        traceId:
+          type: string
+          format: uuid
+        error:
+          $ref: '#/components/schemas/ToolError'
+
+    # Product schemas
+    ProductSummary:
+      type: object
+      required:
+        - id
+        - provider
+        - name
+        - price
+        - availability
+      properties:
+        id:
+          type: string
+          description: Unique product identifier
+          example: "prod_abc123"
+        provider:
+          type: string
+          description: Provider/marketplace name
+          example: "amazon"
+        name:
+          type: string
+          description: Product name
+          example: "Sony WH-1000XM5 Wireless Headphones"
+        description:
+          type: string
+          description: Product description
+        brand:
+          type: string
+          description: Brand name
+          example: "Sony"
+        category:
+          type: string
+          description: Product category path
+          example: "electronics.audio.headphones"
+        price:
+          $ref: '#/components/schemas/Money'
+        imageUrl:
+          type: string
+          format: uri
+          description: Product image URL
+        availability:
+          $ref: '#/components/schemas/Availability'
+        rating:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 5
+          description: Average rating (0-5)
+          example: 4.5
+        reviewCount:
+          type: integer
+          description: Number of reviews
+          example: 1250
+        attributes:
+          type: object
+          additionalProperties: true
+          description: Category-specific attributes
+
+    ProductDetails:
+      allOf:
+        - $ref: '#/components/schemas/ProductSummary'
+        - type: object
+          properties:
+            longDescription:
+              type: string
+              description: Detailed product description
+            specifications:
+              type: object
+              additionalProperties: true
+              description: Technical specifications
+            variants:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProductVariant'
+              description: Available variants (color, size, etc.)
+            images:
+              type: array
+              items:
+                type: string
+                format: uri
+              description: All product images
+            warranty:
+              type: string
+              description: Warranty information
+            returnPolicy:
+              type: string
+              description: Return policy
+            seller:
+              $ref: '#/components/schemas/Seller'
+            offers:
+              type: array
+              items:
+                $ref: '#/components/schemas/Offer'
+              description: Current offers/discounts
+
+    ProductVariant:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          description: Variant name (e.g., "Black", "64GB")
+        type:
+          type: string
+          description: Variant type (color, size, storage)
+        price:
+          $ref: '#/components/schemas/Money'
+        availability:
+          $ref: '#/components/schemas/Availability'
+        imageUrl:
+          type: string
+          format: uri
+
+    Seller:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        rating:
+          type: number
+          format: float
+        reviewCount:
+          type: integer
+
+    Offer:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [DISCOUNT, CASHBACK, BANK_OFFER, EXCHANGE]
+        title:
+          type: string
+          example: "10% off with HDFC Credit Card"
+        description:
+          type: string
+        discount:
+          type: number
+          description: Discount percentage or amount
+        validUntil:
+          type: string
+          format: date-time
+
+    # Cart schemas
+    CartItem:
+      type: object
+      required:
+        - productId
+        - provider
+        - name
+        - quantity
+        - price
+      properties:
+        productId:
+          type: string
+        provider:
+          type: string
+        name:
+          type: string
+        imageUrl:
+          type: string
+          format: uri
+        quantity:
+          type: integer
+          minimum: 1
+        price:
+          $ref: '#/components/schemas/Money'
+        totalPrice:
+          $ref: '#/components/schemas/Money'
+
+    Cart:
+      type: object
+      required:
+        - id
+        - userId
+        - items
+        - total
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItem'
+        subtotal:
+          $ref: '#/components/schemas/Money'
+        tax:
+          $ref: '#/components/schemas/Money'
+        total:
+          $ref: '#/components/schemas/Money'
+        currency:
+          type: string
+          default: "INR"
+        itemCount:
+          type: integer
+
+    # Order schemas
+    Order:
+      type: object
+      required:
+        - id
+        - userId
+        - status
+        - items
+        - total
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        providerOrderId:
+          type: string
+          description: Order ID in provider's system
+        status:
+          type: string
+          enum: [PENDING, CONFIRMED, PROCESSING, SHIPPED, OUT_FOR_DELIVERY, DELIVERED, CANCELLED, RETURNED]
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItem'
+        subtotal:
+          $ref: '#/components/schemas/Money'
+        tax:
+          $ref: '#/components/schemas/Money'
+        shipping:
+          $ref: '#/components/schemas/Money'
+        total:
+          $ref: '#/components/schemas/Money'
+        shippingAddress:
+          $ref: '#/components/schemas/Address'
+        paymentMethod:
+          type: string
+          enum: [COD, UPI, CREDIT_CARD, DEBIT_CARD, NET_BANKING, WALLET]
+        tracking:
+          $ref: '#/components/schemas/TrackingInfo'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        estimatedDelivery:
+          type: string
+          format: date
+
+    TrackingInfo:
+      type: object
+      properties:
+        carrier:
+          type: string
+          example: "BlueDart"
+        trackingNumber:
+          type: string
+        trackingUrl:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrackingEvent'
+
+    TrackingEvent:
+      type: object
+      properties:
+        status:
+          type: string
+        location:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        description:
+          type: string
+
+    # Category/Catalog schemas
+    Category:
+      type: object
+      required:
+        - id
+        - name
+        - path
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          example: "Smartphones"
+        path:
+          type: string
+          description: Dot-separated category path
+          example: "electronics.mobile.smartphones"
+        parentId:
+          type: string
+          nullable: true
+        productCount:
+          type: integer
+        subcategories:
+          type: array
+          items:
+            $ref: '#/components/schemas/Category'
+        attributes:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryAttribute'
+          description: Filterable attributes for this category
+
+    CategoryAttribute:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "brand"
+        displayName:
+          type: string
+          example: "Brand"
+        type:
+          type: string
+          enum: [string, number, boolean, enum, range]
+        values:
+          type: array
+          items:
+            type: string
+          description: Possible values (for enum type)
+        range:
+          type: object
+          properties:
+            min:
+              type: number
+            max:
+              type: number
+          description: Value range (for range type)
+
+    # Provider schemas
+    Provider:
+      type: object
+      required:
+        - id
+        - name
+        - enabled
+      properties:
+        id:
+          type: string
+          example: "amazon"
+        name:
+          type: string
+          example: "Amazon India"
+        enabled:
+          type: boolean
+        capabilities:
+          type: array
+          items:
+            type: string
+            enum: [SEARCH, DETAILS, CART, ORDER, REVIEWS, RECOMMENDATIONS]
+        categories:
+          type: array
+          items:
+            type: string
+          description: Supported category paths
+        priority:
+          type: integer
+          description: Provider priority for routing
+        healthStatus:
+          type: string
+          enum: [HEALTHY, DEGRADED, DOWN]
+
+    # Review schemas
+    Review:
+      type: object
+      properties:
+        id:
+          type: string
+        author:
+          type: string
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        title:
+          type: string
+        content:
+          type: string
+        helpful:
+          type: integer
+          description: Number of helpful votes
+        verified:
+          type: boolean
+          description: Verified purchase
+        createdAt:
+          type: string
+          format: date-time
+        images:
+          type: array
+          items:
+            type: string
+            format: uri
+
+    ReviewSummary:
+      type: object
+      properties:
+        averageRating:
+          type: number
+          format: float
+        totalReviews:
+          type: integer
+        ratingDistribution:
+          type: object
+          properties:
+            5:
+              type: integer
+            4:
+              type: integer
+            3:
+              type: integer
+            2:
+              type: integer
+            1:
+              type: integer
+        pros:
+          type: array
+          items:
+            type: string
+        cons:
+          type: array
+          items:
+            type: string
+
+    # Request schemas
+    SearchProductsRequest:
+      type: object
+      properties:
+        query:
+          type: string
+          description: Search query text
+          example: "wireless headphones"
+        filters:
+          type: object
+          properties:
+            brand:
+              type: string
+              description: Filter by brand
+            category:
+              type: string
+              description: Category path filter
+            priceMin:
+              type: number
+              description: Minimum price
+            priceMax:
+              type: number
+              description: Maximum price
+            inStock:
+              type: boolean
+              description: Only show in-stock items
+            rating:
+              type: number
+              minimum: 1
+              maximum: 5
+              description: Minimum rating
+            provider:
+              type: string
+              description: Filter by specific provider
+          additionalProperties: true
+        sortBy:
+          type: string
+          enum: [relevance, price_asc, price_desc, rating, newest, popularity]
+          default: relevance
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    GetProductByIdRequest:
+      type: object
+      required:
+        - productId
+        - provider
+      properties:
+        productId:
+          type: string
+        provider:
+          type: string
+        includeVariants:
+          type: boolean
+          default: true
+        includeReviews:
+          type: boolean
+          default: false
+        reviewLimit:
+          type: integer
+          default: 5
+
+    CompareProductsRequest:
+      type: object
+      required:
+        - productIds
+      properties:
+        productIds:
+          type: array
+          items:
+            type: string
+          minItems: 2
+          maxItems: 5
+          description: Product IDs to compare
+        comparisonFields:
+          type: array
+          items:
+            type: string
+          description: Specific fields to compare (optional)
+
+    FindProvidersByCategoryRequest:
+      type: object
+      required:
+        - category
+      properties:
+        category:
+          type: string
+          description: Category path (dot-separated)
+          example: "electronics.mobile.smartphones"
+        capabilities:
+          type: array
+          items:
+            type: string
+            enum: [SEARCH, DETAILS, CART, ORDER, REVIEWS, RECOMMENDATIONS]
+          description: Required capabilities
+
+    GetCatalogByCategoryRequest:
+      type: object
+      required:
+        - category
+      properties:
+        category:
+          type: string
+          description: Category path (dot-separated, empty for root)
+          example: "electronics.mobile"
+        depth:
+          type: integer
+          minimum: 1
+          maximum: 5
+          default: 1
+          description: Depth of subcategories to include
+        includeFacets:
+          type: boolean
+          default: true
+          description: Include filterable attributes
+        includeTopBrands:
+          type: boolean
+          default: true
+          description: Include popular brands
+
+    CartAddItemRequest:
+      type: object
+      required:
+        - userId
+        - productId
+        - provider
+        - quantity
+      properties:
+        userId:
+          type: string
+        productId:
+          type: string
+        provider:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+        idempotencyKey:
+          type: string
+          description: Unique key to prevent duplicate additions
+
+    CartUpdateItemRequest:
+      type: object
+      required:
+        - userId
+        - productId
+        - quantity
+      properties:
+        userId:
+          type: string
+        productId:
+          type: string
+        quantity:
+          type: integer
+          minimum: 0
+
+    CartRemoveItemRequest:
+      type: object
+      required:
+        - userId
+        - productId
+      properties:
+        userId:
+          type: string
+        productId:
+          type: string
+
+    CartGetRequest:
+      type: object
+      required:
+        - userId
+      properties:
+        userId:
+          type: string
+
+    CreateOrderRequest:
+      type: object
+      required:
+        - userId
+        - cartId
+        - shippingAddress
+        - paymentMethod
+        - idempotencyKey
+      properties:
+        userId:
+          type: string
+        cartId:
+          type: string
+        shippingAddress:
+          $ref: '#/components/schemas/Address'
+        paymentMethod:
+          type: string
+          enum: [COD, UPI, CREDIT_CARD, DEBIT_CARD, NET_BANKING, WALLET]
+        paymentDetails:
+          type: object
+          description: Payment-method-specific details
+          additionalProperties: true
+        idempotencyKey:
+          type: string
+          description: Required - prevents duplicate orders
+
+    GetOrderStatusRequest:
+      type: object
+      required:
+        - userId
+        - orderId
+      properties:
+        userId:
+          type: string
+        orderId:
+          type: string
+
+    GetRecommendationsRequest:
+      type: object
+      required:
+        - userId
+        - recommendationType
+      properties:
+        userId:
+          type: string
+        recommendationType:
+          type: string
+          enum: [similar, complementary, trending, personalized, deals]
+        contextProductId:
+          type: string
+          description: Product ID for similar/complementary recommendations
+        category:
+          type: string
+          description: Category for trending/personalized
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 5
+
+    GetProductReviewsRequest:
+      type: object
+      required:
+        - productId
+        - provider
+      properties:
+        productId:
+          type: string
+        provider:
+          type: string
+        minRating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        sortBy:
+          type: string
+          enum: [date, helpful, rating_high, rating_low]
+          default: date
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    CheckAvailabilityRequest:
+      type: object
+      required:
+        - productId
+        - provider
+        - postalCode
+      properties:
+        productId:
+          type: string
+        provider:
+          type: string
+        postalCode:
+          type: string
+        quantity:
+          type: integer
+          default: 1
+
+    # Response schemas
+    SearchProductsResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: true
+        traceId:
+          type: string
+          format: uuid
+        data:
+          type: object
+          properties:
+            products:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProductSummary'
+            total:
+              type: integer
+            pagination:
+              $ref: '#/components/schemas/PaginationResponse'
+            facets:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    value:
+                      type: string
+                    count:
+                      type: integer
+        error:
+          $ref: '#/components/schemas/ToolError'
+
+    GetProductByIdResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        traceId:
+          type: string
+          format: uuid
+        data:
+          $ref: '#/components/schemas/ProductDetails'
+        error:
+          $ref: '#/components/schemas/ToolError'
+
+    CompareProductsResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        traceId:
+          type: string
+          format: uuid
+        data:
+          type: object
+          properties:
+            products:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProductSummary'
+            comparisonMatrix:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+            recommendation:
+              type: string
+        error:
+          $ref: '#/components/schemas/ToolError'
+
+    FindProvidersByCategoryResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        traceId:
+          type: string
+          format: uuid
+        data:
+          type: object
+          properties:
+            providers:
+              type: array
+              items:
+                $ref: '#/components/schemas/Provider'
+            category:
+              type: string
+        error:
+          $ref: '#/components/schemas/ToolError'
+
+    GetCatalogByCategoryResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        traceId:
+          type: string
+          format: uuid
+        data:
+          type: object
+          properties:
+            category:
+              $ref: '#/components/schemas/Category'
+            breadcrumb:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  path:
+                    type: string
+            topBrands:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  productCount:
+                    type: integer
+            priceRange:
+              type: object
+              properties:
+                min:
+                  type: number
+                max:
+                  type: number
+        error:
+          $ref: '#/components/schemas/ToolError'
+
+    CartResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        traceId:
+          type: string
+          format: uuid
+        data:
+          $ref: '#/components/schemas/Cart'
+        error:
+          $ref: '#/components/schemas/ToolError'
+
+    CreateOrderResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        traceId:
+          type: string
+          format: uuid
+        data:
+          $ref: '#/components/schemas/Order'
+        error:
+          $ref: '#/components/schemas/ToolError'
+
+    GetOrderStatusResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        traceId:
+          type: string
+          format: uuid
+        data:
+          $ref: '#/components/schemas/Order'
+        error:
+          $ref: '#/components/schemas/ToolError'
+
+    GetRecommendationsResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        traceId:
+          type: string
+          format: uuid
+        data:
+          type: object
+          properties:
+            recommendations:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProductSummary'
+            type:
+              type: string
+            reason:
+              type: string
+              description: Why these products are recommended
+        error:
+          $ref: '#/components/schemas/ToolError'
+
+    GetProductReviewsResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        traceId:
+          type: string
+          format: uuid
+        data:
+          type: object
+          properties:
+            reviews:
+              type: array
+              items:
+                $ref: '#/components/schemas/Review'
+            summary:
+              $ref: '#/components/schemas/ReviewSummary'
+            pagination:
+              $ref: '#/components/schemas/PaginationResponse'
+        error:
+          $ref: '#/components/schemas/ToolError'
+
+    CheckAvailabilityResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        traceId:
+          type: string
+          format: uuid
+        data:
+          type: object
+          properties:
+            availability:
+              $ref: '#/components/schemas/Availability'
+            deliveryEstimate:
+              type: object
+              properties:
+                earliest:
+                  type: string
+                  format: date
+                latest:
+                  type: string
+                  format: date
+                freeDelivery:
+                  type: boolean
+                deliveryCharge:
+                  $ref: '#/components/schemas/Money'
+            nearbyStores:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  distance:
+                    type: string
+                  available:
+                    type: boolean
+        error:
+          $ref: '#/components/schemas/ToolError'
+
+  responses:
+    ValidationError:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ToolResponseError'
+          example:
+            ok: false
+            traceId: "550e8400-e29b-41d4-a716-446655440000"
+            error:
+              code: "VALIDATION_ERROR"
+              message: "Query parameter is required"
+              details:
+                field: "query"
+                constraint: "required"
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ToolResponseError'
+          example:
+            ok: false
+            traceId: "550e8400-e29b-41d4-a716-446655440000"
+            error:
+              code: "NOT_FOUND"
+              message: "Product not found"
+
+    RateLimitError:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ToolResponseError'
+          example:
+            ok: false
+            traceId: "550e8400-e29b-41d4-a716-446655440000"
+            error:
+              code: "RATE_LIMIT"
+              message: "Rate limit exceeded. Try again in 60 seconds."
+              details:
+                retryAfter: 60
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ToolResponseError'
+          example:
+            ok: false
+            traceId: "550e8400-e29b-41d4-a716-446655440000"
+            error:
+              code: "INTERNAL_ERROR"
+              message: "An unexpected error occurred"
+
+  examples:
+    SearchProductsSuccess:
+      summary: Successful search response
+      value:
+        ok: true
+        traceId: "550e8400-e29b-41d4-a716-446655440000"
+        data:
+          products:
+            - id: "prod_sony_wh1000xm5"
+              provider: "amazon"
+              name: "Sony WH-1000XM5 Wireless Headphones"
+              description: "Industry-leading noise cancellation"
+              brand: "Sony"
+              category: "electronics.audio.headphones"
+              price:
+                amount: 29990
+                currency: "INR"
+              imageUrl: "https://cdn.example.com/sony-wh1000xm5.jpg"
+              availability:
+                inStock: true
+                status: "IN_STOCK"
+              rating: 4.5
+              reviewCount: 1250
+            - id: "prod_bose_qc45"
+              provider: "flipkart"
+              name: "Bose QuietComfort 45"
+              description: "Premium noise cancelling headphones"
+              brand: "Bose"
+              category: "electronics.audio.headphones"
+              price:
+                amount: 27990
+                currency: "INR"
+              imageUrl: "https://cdn.example.com/bose-qc45.jpg"
+              availability:
+                inStock: true
+                status: "IN_STOCK"
+              rating: 4.4
+              reviewCount: 890
+          total: 2
+          pagination:
+            page: 1
+            limit: 20
+            total: 2
+            hasMore: false
+
+    SearchProductsEmpty:
+      summary: No results found
+      value:
+        ok: true
+        traceId: "550e8400-e29b-41d4-a716-446655440000"
+        data:
+          products: []
+          total: 0
+          pagination:
+            page: 1
+            limit: 20
+            total: 0
+            hasMore: false
+
+    ProductDetailsElectronics:
+      summary: Electronics product details
+      value:
+        ok: true
+        traceId: "550e8400-e29b-41d4-a716-446655440000"
+        data:
+          id: "prod_sony_wh1000xm5"
+          provider: "amazon"
+          name: "Sony WH-1000XM5 Wireless Headphones"
+          description: "Industry-leading noise cancellation"
+          longDescription: "Experience the next level of silence with Sony's most advanced noise canceling headphones ever..."
+          brand: "Sony"
+          category: "electronics.audio.headphones"
+          price:
+            amount: 29990
+            currency: "INR"
+          imageUrl: "https://cdn.example.com/sony-wh1000xm5.jpg"
+          images:
+            - "https://cdn.example.com/sony-wh1000xm5-1.jpg"
+            - "https://cdn.example.com/sony-wh1000xm5-2.jpg"
+          availability:
+            inStock: true
+            quantity: 50
+            status: "IN_STOCK"
+          rating: 4.5
+          reviewCount: 1250
+          specifications:
+            driver_unit: "30mm"
+            frequency_response: "4Hz-40,000Hz"
+            battery_life: "30 hours"
+            bluetooth_version: "5.2"
+            weight: "250g"
+            noise_cancellation: "Yes"
+          warranty: "1 Year Manufacturer Warranty"
+          returnPolicy: "10 Day Replacement"
+          attributes:
+            color: "Black"
+            connectivity: "Bluetooth, 3.5mm"
+          variants:
+            - id: "prod_sony_wh1000xm5_black"
+              name: "Black"
+              type: "color"
+              price:
+                amount: 29990
+                currency: "INR"
+              availability:
+                inStock: true
+                status: "IN_STOCK"
+            - id: "prod_sony_wh1000xm5_silver"
+              name: "Silver"
+              type: "color"
+              price:
+                amount: 29990
+                currency: "INR"
+              availability:
+                inStock: false
+                status: "OUT_OF_STOCK"
+          offers:
+            - type: "BANK_OFFER"
+              title: "10% off with HDFC Credit Card"
+              description: "Get 10% instant discount up to ₹1500"
+              discount: 10
+
+    ProductDetailsFashion:
+      summary: Fashion product details
+      value:
+        ok: true
+        traceId: "550e8400-e29b-41d4-a716-446655440000"
+        data:
+          id: "prod_levis_501"
+          provider: "flipkart"
+          name: "Levi's 501 Original Fit Jeans"
+          description: "The original blue jean since 1873"
+          brand: "Levi's"
+          category: "fashion.men.jeans"
+          price:
+            amount: 3999
+            currency: "INR"
+          availability:
+            inStock: true
+            status: "IN_STOCK"
+          rating: 4.3
+          reviewCount: 5420
+          specifications:
+            fit: "Original"
+            rise: "Mid Rise"
+            fabric: "100% Cotton Denim"
+            wash: "Medium Indigo"
+          attributes:
+            size: ["28", "30", "32", "34", "36"]
+            color: "Medium Indigo"
+            care_instructions: "Machine wash cold"
+          variants:
+            - id: "prod_levis_501_28"
+              name: "28"
+              type: "size"
+              availability:
+                inStock: true
+                status: "IN_STOCK"
+            - id: "prod_levis_501_30"
+              name: "30"
+              type: "size"
+              availability:
+                inStock: true
+                status: "LOW_STOCK"
+                quantity: 3
+
+    CompareProductsSuccess:
+      summary: Product comparison
+      value:
+        ok: true
+        traceId: "550e8400-e29b-41d4-a716-446655440000"
+        data:
+          products:
+            - id: "prod_sony_wh1000xm5"
+              name: "Sony WH-1000XM5"
+              brand: "Sony"
+              price:
+                amount: 29990
+                currency: "INR"
+              rating: 4.5
+            - id: "prod_bose_qc45"
+              name: "Bose QuietComfort 45"
+              brand: "Bose"
+              price:
+                amount: 27990
+                currency: "INR"
+              rating: 4.4
+          comparisonMatrix:
+            name: ["Sony WH-1000XM5", "Bose QuietComfort 45"]
+            price: ["INR 29990", "INR 27990"]
+            brand: ["Sony", "Bose"]
+            rating: ["4.5/5", "4.4/5"]
+            availability: ["In Stock", "In Stock"]
+          recommendation: "Best value: Bose QuietComfort 45 at INR 27990. Highest rated: Sony WH-1000XM5 with 4.5 stars."
+
+    FindProvidersByCategorySuccess:
+      summary: Providers for category
+      value:
+        ok: true
+        traceId: "550e8400-e29b-41d4-a716-446655440000"
+        data:
+          category: "electronics.mobile.smartphones"
+          providers:
+            - id: "amazon"
+              name: "Amazon India"
+              enabled: true
+              capabilities: ["SEARCH", "DETAILS", "CART", "ORDER", "REVIEWS"]
+              priority: 1
+              healthStatus: "HEALTHY"
+            - id: "flipkart"
+              name: "Flipkart"
+              enabled: true
+              capabilities: ["SEARCH", "DETAILS", "CART", "ORDER"]
+              priority: 2
+              healthStatus: "HEALTHY"
+            - id: "reliancedigital"
+              name: "Reliance Digital"
+              enabled: true
+              capabilities: ["SEARCH", "DETAILS"]
+              priority: 3
+              healthStatus: "HEALTHY"
+
+    GetCatalogByCategorySuccess:
+      summary: Category catalog
+      value:
+        ok: true
+        traceId: "550e8400-e29b-41d4-a716-446655440000"
+        data:
+          category:
+            id: "cat_electronics_mobile"
+            name: "Mobile Phones"
+            path: "electronics.mobile"
+            productCount: 15420
+            subcategories:
+              - id: "cat_smartphones"
+                name: "Smartphones"
+                path: "electronics.mobile.smartphones"
+                productCount: 12500
+              - id: "cat_feature_phones"
+                name: "Feature Phones"
+                path: "electronics.mobile.feature_phones"
+                productCount: 2920
+            attributes:
+              - name: "brand"
+                displayName: "Brand"
+                type: "enum"
+                values: ["Apple", "Samsung", "OnePlus", "Xiaomi", "Realme"]
+              - name: "price"
+                displayName: "Price"
+                type: "range"
+                range:
+                  min: 5000
+                  max: 200000
+              - name: "ram"
+                displayName: "RAM"
+                type: "enum"
+                values: ["4GB", "6GB", "8GB", "12GB", "16GB"]
+          breadcrumb:
+            - id: "cat_electronics"
+              name: "Electronics"
+              path: "electronics"
+            - id: "cat_electronics_mobile"
+              name: "Mobile Phones"
+              path: "electronics.mobile"
+          topBrands:
+            - name: "Samsung"
+              productCount: 3500
+            - name: "Apple"
+              productCount: 2800
+            - name: "OnePlus"
+              productCount: 1500
+          priceRange:
+            min: 5999
+            max: 189900
+
+    CartSuccess:
+      summary: Cart with items
+      value:
+        ok: true
+        traceId: "550e8400-e29b-41d4-a716-446655440000"
+        data:
+          id: "cart_123"
+          userId: "user_456"
+          items:
+            - productId: "prod_sony_wh1000xm5"
+              provider: "amazon"
+              name: "Sony WH-1000XM5 Wireless Headphones"
+              imageUrl: "https://cdn.example.com/sony-wh1000xm5.jpg"
+              quantity: 1
+              price:
+                amount: 29990
+                currency: "INR"
+              totalPrice:
+                amount: 29990
+                currency: "INR"
+          subtotal:
+            amount: 29990
+            currency: "INR"
+          tax:
+            amount: 5398
+            currency: "INR"
+          total:
+            amount: 35388
+            currency: "INR"
+          currency: "INR"
+          itemCount: 1
+
+    CartEmpty:
+      summary: Empty cart
+      value:
+        ok: true
+        traceId: "550e8400-e29b-41d4-a716-446655440000"
+        data:
+          id: "cart_123"
+          userId: "user_456"
+          items: []
+          subtotal:
+            amount: 0
+            currency: "INR"
+          tax:
+            amount: 0
+            currency: "INR"
+          total:
+            amount: 0
+            currency: "INR"
+          currency: "INR"
+          itemCount: 0
+
+    OrderCreateSuccess:
+      summary: Order created
+      value:
+        ok: true
+        traceId: "550e8400-e29b-41d4-a716-446655440000"
+        data:
+          id: "order_789"
+          userId: "user_456"
+          providerOrderId: "AMZ-2024-123456"
+          status: "CONFIRMED"
+          items:
+            - productId: "prod_sony_wh1000xm5"
+              provider: "amazon"
+              name: "Sony WH-1000XM5 Wireless Headphones"
+              quantity: 1
+              price:
+                amount: 29990
+                currency: "INR"
+          subtotal:
+            amount: 29990
+            currency: "INR"
+          tax:
+            amount: 5398
+            currency: "INR"
+          shipping:
+            amount: 0
+            currency: "INR"
+          total:
+            amount: 35388
+            currency: "INR"
+          shippingAddress:
+            line1: "123 MG Road"
+            line2: "Apt 4B"
+            city: "Bangalore"
+            state: "Karnataka"
+            postalCode: "560001"
+            country: "IN"
+          paymentMethod: "COD"
+          createdAt: "2024-02-01T10:30:00Z"
+          estimatedDelivery: "2024-02-05"
+
+    OrderStatusShipped:
+      summary: Shipped order
+      value:
+        ok: true
+        traceId: "550e8400-e29b-41d4-a716-446655440000"
+        data:
+          id: "order_789"
+          userId: "user_456"
+          status: "SHIPPED"
+          tracking:
+            carrier: "BlueDart"
+            trackingNumber: "BD123456789"
+            trackingUrl: "https://bluedart.com/track/BD123456789"
+            events:
+              - status: "SHIPPED"
+                location: "Bangalore Hub"
+                timestamp: "2024-02-02T14:30:00Z"
+                description: "Package shipped from seller facility"
+              - status: "IN_TRANSIT"
+                location: "Chennai Hub"
+                timestamp: "2024-02-03T08:00:00Z"
+                description: "Package in transit"
+          estimatedDelivery: "2024-02-05"
+
+    RecommendationsSuccess:
+      summary: Product recommendations
+      value:
+        ok: true
+        traceId: "550e8400-e29b-41d4-a716-446655440000"
+        data:
+          type: "complementary"
+          reason: "Customers who bought Sony WH-1000XM5 also bought these"
+          recommendations:
+            - id: "prod_sony_case"
+              provider: "amazon"
+              name: "Sony Headphone Carrying Case"
+              price:
+                amount: 1999
+                currency: "INR"
+              rating: 4.3
+            - id: "prod_audio_cable"
+              provider: "amazon"
+              name: "Premium Audio Cable 3.5mm"
+              price:
+                amount: 599
+                currency: "INR"
+              rating: 4.1
+
+    ProductReviewsSuccess:
+      summary: Product reviews
+      value:
+        ok: true
+        traceId: "550e8400-e29b-41d4-a716-446655440000"
+        data:
+          summary:
+            averageRating: 4.5
+            totalReviews: 1250
+            ratingDistribution:
+              5: 750
+              4: 350
+              3: 100
+              2: 30
+              1: 20
+            pros:
+              - "Excellent noise cancellation"
+              - "Comfortable for long use"
+              - "Great battery life"
+            cons:
+              - "Premium price"
+              - "No water resistance"
+          reviews:
+            - id: "review_001"
+              author: "TechEnthusiast"
+              rating: 5
+              title: "Best headphones I've ever owned"
+              content: "The noise cancellation is truly industry-leading..."
+              helpful: 245
+              verified: true
+              createdAt: "2024-01-15T10:30:00Z"
+          pagination:
+            page: 1
+            limit: 10
+            total: 1250
+            hasMore: true
+
+    AvailabilityInStock:
+      summary: Product in stock
+      value:
+        ok: true
+        traceId: "550e8400-e29b-41d4-a716-446655440000"
+        data:
+          availability:
+            inStock: true
+            quantity: 50
+            status: "IN_STOCK"
+          deliveryEstimate:
+            earliest: "2024-02-03"
+            latest: "2024-02-05"
+            freeDelivery: true
+
+    AvailabilityLimited:
+      summary: Limited stock
+      value:
+        ok: true
+        traceId: "550e8400-e29b-41d4-a716-446655440000"
+        data:
+          availability:
+            inStock: true
+            quantity: 3
+            status: "LOW_STOCK"
+          deliveryEstimate:
+            earliest: "2024-02-04"
+            latest: "2024-02-06"
+            freeDelivery: false
+            deliveryCharge:
+              amount: 40
+              currency: "INR"

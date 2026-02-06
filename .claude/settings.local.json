@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(source:*)",
+      "Bash(node:*)",
+      "Bash(npm run build:*)",
+      "Bash(curl:*)",
+      "Bash(lsof:*)",
+      "Bash(./mvnw clean:*)",
+      "Bash(mvn clean compile:*)",
+      "Bash(npx prisma migrate dev:*)",
+      "Bash(npx prisma db push:*)",
+      "Bash(mvn compile:*)",
+      "Bash(mvn clean package:*)",
+      "Bash(PGPASSWORD='.Qx#\\(~[\\(_cQLuA6+' psql:*)",
+      "Bash(NODE_DATABASE_URL='postgresql://postgres:.Qx%23%28~%5B%28_cQLuA6%2B@dev.framasaasai.com:5432/commerce_ai' npx tsx:*)",
+      "Bash(pkill:*)",
+      "Bash(chmod:*)",
+      "Bash(./scripts/test-phase1-phase2.sh:*)",
+      "Bash(/Users/vikas/workspace/commerce-ai/scripts/test-phase1-phase2.sh)",
+      "Bash(/Users/vikas/workspace/commerce-ai/scripts/test-features.sh:*)",
+      "Bash(psql postgresql://postgres:'.Qx#\\(~[\\(_cQLuA6+'@dev.framasaasai.com:5432/commerce_ai -c \"UPDATE providers SET capabilities = ARRAY[''SEARCH'', ''CART'', ''ORDER''] WHERE id = ''mock'';\")",
+      "Bash(find:*)",
+      "Bash(npx tsx:*)",
+      "Bash(npx prisma db execute:*)",
+      "Bash(xargs:*)",
+      "Bash(./scripts/apply-ucp-cleanup.sh)",
+      "Bash(npx ts-node:*)",
+      "Bash(grep:*)",
+      "Bash(./scripts/manage-apps.sh:*)",
+      "Bash(ls:*)"
+    ]
+  }
+}

@@ -1,0 +1,35 @@
+APIs (App-Facing) — BFF OpenAPI Requirements
+
+BFF must expose:
+
+POST /v1/auth/login
+
+POST /v1/chat/sessions
+
+POST /v1/chat/messages (SSE)
+
+GET /v1/products/search (optional, but recommended for non-chat browsing)
+
+POST /v1/cart/items
+
+PATCH /v1/cart/items/{productId}
+
+DELETE /v1/cart/items/{productId}
+
+GET /v1/cart
+
+POST /v1/orders
+
+GET /v1/orders/{orderId}
+
+POST /v1/events (telemetry)
+
+BFF response to chat must be structured:
+
+assistant text
+
+product cards (with actions)
+
+followUp chips
+
+metadata (traceId, evidenceIds)

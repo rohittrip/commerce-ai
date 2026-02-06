@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "productId": { "type": "string" },
+    "quantity": { "type": "integer" },
+    "address": {
+      "type": "object",
+      "properties": {
+        "pincode": { "type": "string" }
+      }
+    }
+  },
+  "required": ["productId", "address"]
+}

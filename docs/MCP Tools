@@ -1,0 +1,31 @@
+MCP Tools (Internal Only) — Canonical Tool Set (v1)
+Tool names (Java MCP Tool Server)
+
+commerce.searchProducts
+
+commerce.compareProducts
+
+commerce.getPriceAndAvailability (optional)
+
+commerce.cart.addItem
+
+commerce.cart.updateItemQty
+
+commerce.cart.removeItem
+
+commerce.cart.getCart
+
+commerce.order.createOrder
+
+commerce.order.getOrderStatus
+
+All tools must:
+
+accept strict JSON inputs validated against JSON Schema
+
+return envelope: { ok, traceId, data? , error? }
+
+never return free-form text
+
+Schemas must be stored in:
+docs/api/mcp-tool-schemas/v1/*.json
