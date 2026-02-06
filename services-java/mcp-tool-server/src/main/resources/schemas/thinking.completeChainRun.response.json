@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["runId", "status", "stepCount"],
+  "properties": {
+    "runId": {
+      "type": "string",
+      "description": "Chain run ID"
+    },
+    "status": {
+      "type": "string",
+      "description": "Final status"
+    },
+    "stepCount": {
+      "type": "integer",
+      "description": "Total number of steps"
+    }
+  }
+}

@@ -1,0 +1,1034 @@
+openapi: 3.0.3
+info:
+  title: Mock Commerce Provider API
+  description: |
+    Mock Provider API for testing and development of the Commerce AI platform.
+
+    This provider simulates a real e-commerce platform with a comprehensive product catalog,
+    cart management, order processing, reviews, and recommendations.
+
+    ## Features
+    - **40+ Product Catalog** across Electronics, Fashion, and other categories
+    - **Full Shopping Experience**: Search, Cart, Checkout, Orders
+    - **Product Reviews & Ratings** with mock data
+    - **Recommendations Engine** (similar, complementary, trending products)
+    - **Promotions & Coupons** with validation
+    - **Shipping Estimates** based on location
+    - **Product Variants** (color, size, storage)
+
+    ## Mock Data Characteristics
+    - Network delay simulation (150ms per request)
+    - Realistic product attributes and prices (INR)
+    - In-memory storage (resets on restart)
+    - Deterministic behavior for testing
+
+  version: 1.0.0
+  contact:
+    name: Commerce AI Team
+    email: commerce-ai@acme.com
+
+servers:
+  - url: http://localhost:8081/api/v1/mock
+    description: Local development (via MCP Tool Server)
+
+tags:
+  - name: Search & Discovery
+    description: Product search and catalog browsing
+  - name: Product Details
+    description: Detailed product information
+  - name: Cart
+    description: Shopping cart operations
+  - name: Orders
+    description: Order creation and tracking
+  - name: Reviews
+    description: Product reviews and ratings
+  - name: Recommendations
+    description: Product recommendations
+  - name: Promotions
+    description: Coupons and offers
+
+paths:
+  /search:
+    get:
+      tags:
+        - Search & Discovery
+      summary: Search products in mock catalog
+      description: |
+        Full-text search across 40+ products with filtering and sorting capabilities.
+
+        **Supported Filters:**
+        - Price range (priceMin, priceMax)
+        - Categories (hierarchical dot-notation)
+        - Brands
+        - In-stock only
+
+        **Network Simulation:** 150ms delay
+      operationId: mockSearch
+      parameters:
+        - name: query
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "wireless headphones"
+          description: Search query (searches name, brand, category, description)
+        - name: priceMin
+          in: query
+          schema:
+            type: number
+            example: 1000
+          description: Minimum price filter
+        - name: priceMax
+          in: query
+          schema:
+            type: number
+            example: 50000
+          description: Maximum price filter
+        - name: categories
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+            example: ["electronics.mobile.smartphones"]
+          description: Category filters (comma-separated)
+        - name: brands
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+            example: ["Apple", "Samsung"]
+          description: Brand filters (comma-separated)
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductSummary'
+              examples:
+                headphones:
+                  $ref: '#/components/examples/SearchHeadphones'
+                mobiles:
+                  $ref: '#/components/examples/SearchMobiles'
+
+  /products/{productId}:
+    get:
+      tags:
+        - Product Details
+      summary: Get product details
+      description: Retrieve full product information including variants and specifications
+      operationId: mockGetProduct
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "MOB001"
+      responses:
+        '200':
+          description: Product details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductSummary'
+        '404':
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /products/{productId}/variants:
+    get:
+      tags:
+        - Product Details
+      summary: List product variants
+      description: |
+        Get available variants for a product (color, size, storage options).
+
+        **Mock Data:** Returns 2-3 variants per product with different attributes and prices.
+      operationId: mockListVariants
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Product variants
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  productId:
+                    type: string
+                  variants:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProductVariant'
+
+  /products/{productId}/reviews:
+    get:
+      tags:
+        - Reviews
+      summary: Get product reviews
+      description: |
+        Retrieve reviews and ratings for a product.
+
+        **Mock Data:** Generates 5-10 realistic reviews with ratings, helpful votes, and verified purchase badges.
+      operationId: mockGetReviews
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [recent, helpful, rating_high, rating_low]
+            default: recent
+      responses:
+        '200':
+          description: Product reviews
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reviews:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Review'
+                  summary:
+                    $ref: '#/components/schemas/ReviewSummary'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+
+    post:
+      tags:
+        - Reviews
+      summary: Add a review
+      description: Submit a new product review (mock implementation stores in-memory)
+      operationId: mockAddReview
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewRequest'
+      responses:
+        '201':
+          description: Review created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Review'
+
+  /products/{productId}/availability:
+    get:
+      tags:
+        - Product Details
+      summary: Check product availability
+      description: |
+        Check real-time stock availability and delivery estimates.
+
+        **Mock Logic:**
+        - Mobile/Laptop: 50 units in stock
+        - Other products: 100 units in stock
+        - Delivery: Metro cities 2 days, others 5 days
+      operationId: mockCheckAvailability
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: pincode
+          in: query
+          required: true
+          schema:
+            type: string
+            example: "560001"
+        - name: quantity
+          in: query
+          schema:
+            type: integer
+            default: 1
+      responses:
+        '200':
+          description: Availability info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AvailabilityResponse'
+
+  /recommendations:
+    get:
+      tags:
+        - Recommendations
+      summary: Get product recommendations
+      description: |
+        AI-powered product recommendations.
+
+        **Recommendation Types:**
+        - **similar**: Products similar to given product (same category, nearby price)
+        - **complementary**: Frequently bought together items
+        - **trending**: Popular products in category
+        - **deals**: Best discount offers
+
+        **Mock Implementation:** Returns 3-5 products based on category and price proximity.
+      operationId: mockGetRecommendations
+      parameters:
+        - name: type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [similar, complementary, trending, deals]
+        - name: productId
+          in: query
+          schema:
+            type: string
+          description: Required for 'similar' and 'complementary' types
+        - name: category
+          in: query
+          schema:
+            type: string
+          description: Required for 'trending' and 'deals' types
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 5
+            maximum: 20
+      responses:
+        '200':
+          description: Recommendations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  recommendations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProductSummary'
+
+  /cart/{userId}:
+    get:
+      tags:
+        - Cart
+      summary: Get user's cart
+      description: Retrieve current cart contents (stored in-memory)
+      operationId: mockGetCart
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cart contents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+
+  /cart/{userId}/items:
+    post:
+      tags:
+        - Cart
+      summary: Add item to cart
+      description: |
+        Add a product to the user's shopping cart.
+
+        **Behavior:**
+        - If item already exists, quantity is incremented
+        - Cart totals are automatically recalculated
+        - Product availability is validated
+      operationId: mockAddToCart
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - productId
+                - quantity
+              properties:
+                productId:
+                  type: string
+                  example: "MOB001"
+                quantity:
+                  type: integer
+                  minimum: 1
+                  example: 1
+      responses:
+        '200':
+          description: Updated cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        '404':
+          description: Product not found
+
+  /cart/{userId}/items/{productId}:
+    put:
+      tags:
+        - Cart
+      summary: Update cart item quantity
+      description: Update the quantity of an item in the cart (set to 0 to remove)
+      operationId: mockUpdateCartItem
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - quantity
+              properties:
+                quantity:
+                  type: integer
+                  minimum: 0
+      responses:
+        '200':
+          description: Updated cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+
+    delete:
+      tags:
+        - Cart
+      summary: Remove item from cart
+      description: Remove a product from the shopping cart
+      operationId: mockRemoveCartItem
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Updated cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+
+  /orders:
+    post:
+      tags:
+        - Orders
+      summary: Create order from cart
+      description: |
+        Convert the user's cart into an order.
+
+        **Mock Behavior:**
+        - Generates unique order ID (ORD-XXXXXXXX format)
+        - Clears cart after successful order creation
+        - Sets order status to PENDING
+        - Simulates payment processing
+      operationId: mockCreateOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - userId
+                - cartId
+                - addressId
+                - paymentMethod
+              properties:
+                userId:
+                  type: string
+                cartId:
+                  type: string
+                addressId:
+                  type: string
+                paymentMethod:
+                  $ref: '#/components/schemas/PaymentMethod'
+      responses:
+        '201':
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          description: Cart is empty or invalid
+
+  /orders/{orderId}:
+    get:
+      tags:
+        - Orders
+      summary: Get order status
+      description: |
+        Retrieve order details and current status.
+
+        **Order Lifecycle (Mock):**
+        PENDING → CONFIRMED → PROCESSING → SHIPPED → DELIVERED
+      operationId: mockGetOrderStatus
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '404':
+          description: Order not found
+
+  /promotions:
+    get:
+      tags:
+        - Promotions
+      summary: Get active promotions
+      description: |
+        List all active promotions and discounts.
+
+        **Mock Data:** Returns 1-2 active promotions (e.g., "WINTER2026" - 10% off)
+      operationId: mockGetPromotions
+      responses:
+        '200':
+          description: Active promotions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Promotion'
+
+  /coupons/validate:
+    post:
+      tags:
+        - Promotions
+      summary: Validate coupon code
+      description: |
+        Check if a coupon code is valid and calculate discount.
+
+        **Mock Coupons:**
+        - SAVE10: 10% off (min order ₹500, max discount ₹1000)
+        - FLAT200: ₹200 off (min order ₹1000)
+      operationId: mockValidateCoupon
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - couponCode
+                - orderAmount
+              properties:
+                couponCode:
+                  type: string
+                  example: "SAVE10"
+                orderAmount:
+                  type: number
+                  example: 2000
+      responses:
+        '200':
+          description: Coupon validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CouponValidation'
+
+components:
+  schemas:
+    ProductSummary:
+      type: object
+      required:
+        - id
+        - provider
+        - name
+        - price
+        - availability
+      properties:
+        id:
+          type: string
+          example: "MOB001"
+        provider:
+          type: string
+          enum: [mock]
+          example: "mock"
+        name:
+          type: string
+          example: "Vivo T2x 5G 128 GB, 8 GB RAM, Glimmer Black"
+        description:
+          type: string
+        brand:
+          type: string
+          example: "VIVO"
+        category:
+          type: string
+          example: "electronics.mobile.smartphones"
+        price:
+          $ref: '#/components/schemas/Money'
+        imageUrl:
+          type: string
+          format: uri
+          example: "https://cdn.example.com/products/MOB001.jpg"
+        availability:
+          $ref: '#/components/schemas/Availability'
+        rating:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 5
+          example: 4.3
+        reviewCount:
+          type: integer
+          example: 324
+        attributes:
+          type: object
+          additionalProperties: true
+          description: Category-specific attributes
+          example:
+            storage: "128 GB"
+            ram: "8 GB"
+            screenSize: "6.58 inch"
+            warranty: "1 Year"
+            tags: "5G,BESTSELLER"
+
+    ProductVariant:
+      type: object
+      properties:
+        variantId:
+          type: string
+        name:
+          type: string
+          example: "Black"
+        type:
+          type: string
+          enum: [color, size, storage, capacity]
+          example: "color"
+        attributes:
+          type: object
+          additionalProperties: true
+        price:
+          $ref: '#/components/schemas/Money'
+        inStock:
+          type: boolean
+
+    Money:
+      type: object
+      required:
+        - amount
+        - currency
+      properties:
+        amount:
+          type: number
+          format: decimal
+          example: 12749
+        currency:
+          type: string
+          example: "INR"
+
+    Availability:
+      type: object
+      required:
+        - inStock
+        - status
+      properties:
+        inStock:
+          type: boolean
+        quantity:
+          type: integer
+          description: Available quantity (null if not disclosed)
+        status:
+          type: string
+          enum: [IN_STOCK, OUT_OF_STOCK, LOW_STOCK, PREORDER]
+
+    AvailabilityResponse:
+      type: object
+      properties:
+        productId:
+          type: string
+        availability:
+          $ref: '#/components/schemas/Availability'
+        shippingCost:
+          $ref: '#/components/schemas/Money'
+        estimatedDeliveryDays:
+          type: integer
+          example: 2
+        estimatedDeliveryDate:
+          type: string
+          format: date
+
+    Review:
+      type: object
+      properties:
+        reviewId:
+          type: string
+        productId:
+          type: string
+        userId:
+          type: string
+        userName:
+          type: string
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        title:
+          type: string
+        content:
+          type: string
+        helpful:
+          type: integer
+          description: Number of helpful votes
+        verified:
+          type: boolean
+          description: Verified purchase
+        createdAt:
+          type: string
+          format: date-time
+
+    ReviewRequest:
+      type: object
+      required:
+        - userId
+        - rating
+        - title
+        - content
+      properties:
+        userId:
+          type: string
+        userName:
+          type: string
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        title:
+          type: string
+        content:
+          type: string
+
+    ReviewSummary:
+      type: object
+      properties:
+        averageRating:
+          type: number
+          format: float
+          example: 4.3
+        totalReviews:
+          type: integer
+          example: 324
+        ratingDistribution:
+          type: object
+          properties:
+            5:
+              type: integer
+            4:
+              type: integer
+            3:
+              type: integer
+            2:
+              type: integer
+            1:
+              type: integer
+
+    Cart:
+      type: object
+      required:
+        - id
+        - userId
+        - items
+        - total
+      properties:
+        id:
+          type: string
+          example: "CART-user123"
+        userId:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItem'
+        subtotal:
+          $ref: '#/components/schemas/Money'
+        total:
+          $ref: '#/components/schemas/Money'
+        currency:
+          type: string
+          example: "INR"
+        itemCount:
+          type: integer
+          example: 2
+
+    CartItem:
+      type: object
+      required:
+        - productId
+        - provider
+        - quantity
+        - unitPrice
+      properties:
+        productId:
+          type: string
+        provider:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+        unitPrice:
+          $ref: '#/components/schemas/Money'
+        product:
+          $ref: '#/components/schemas/ProductSummary'
+
+    Order:
+      type: object
+      required:
+        - id
+        - userId
+        - status
+        - items
+        - total
+      properties:
+        id:
+          type: string
+          example: "ORD-A3B7C91F"
+        userId:
+          type: string
+        provider:
+          type: string
+          example: "mock"
+        providerOrderId:
+          type: string
+          example: "MOCK-ORD-A3B7C91F"
+        status:
+          type: string
+          enum: [PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED]
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItem'
+        total:
+          $ref: '#/components/schemas/Money'
+        paymentMethod:
+          $ref: '#/components/schemas/PaymentMethod'
+        shippingAddress:
+          $ref: '#/components/schemas/Address'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PaymentMethod:
+      type: string
+      enum: [COD, UPI, CREDIT_CARD, DEBIT_CARD, NET_BANKING, WALLET, EMI]
+
+    Address:
+      type: object
+      required:
+        - line1
+        - city
+        - pincode
+        - country
+      properties:
+        line1:
+          type: string
+          example: "Test Address"
+        line2:
+          type: string
+        city:
+          type: string
+          example: "Mumbai"
+        state:
+          type: string
+        pincode:
+          type: string
+          example: "400001"
+        country:
+          type: string
+          example: "IN"
+
+    Promotion:
+      type: object
+      properties:
+        promoId:
+          type: string
+        type:
+          type: string
+          enum: [PERCENTAGE, FIXED, BANK_OFFER]
+        value:
+          type: number
+        description:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+
+    CouponValidation:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        couponCode:
+          type: string
+        type:
+          type: string
+          enum: [PERCENTAGE, FIXED]
+        discount:
+          $ref: '#/components/schemas/Money'
+        reason:
+          type: string
+          description: Reason if invalid (e.g., "Minimum order amount not met")
+        minOrder:
+          $ref: '#/components/schemas/Money'
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        hasMore:
+          type: boolean
+
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+
+  examples:
+    SearchHeadphones:
+      summary: Search results for headphones
+      value:
+        - id: "HP001"
+          provider: "mock"
+          name: "Sony WH-1000XM5"
+          description: "Premium noise-cancelling wireless headphones"
+          brand: "Sony"
+          category: "electronics.audio.headphones"
+          price:
+            amount: 29990
+            currency: "INR"
+          imageUrl: "https://cdn.example.com/products/HP001.jpg"
+          availability:
+            inStock: true
+            quantity: 100
+            status: "IN_STOCK"
+          rating: 4.8
+          reviewCount: 1523
+        - id: "HP002"
+          provider: "mock"
+          name: "Bose QuietComfort 45"
+          description: "Industry-leading noise cancellation"
+          brand: "Bose"
+          category: "electronics.audio.headphones"
+          price:
+            amount: 28900
+            currency: "INR"
+          availability:
+            inStock: true
+            status: "IN_STOCK"
+          rating: 4.7
+          reviewCount: 987
+
+    SearchMobiles:
+      summary: Search results for mobile phones
+      value:
+        - id: "MOB002"
+          provider: "mock"
+          name: "Samsung Galaxy S25 Ultra 5G"
+          brand: "Samsung"
+          category: "electronics.mobile.smartphones"
+          price:
+            amount: 129999
+            currency: "INR"
+          rating: 4.8
+          reviewCount: 1876
+          attributes:
+            storage: "256 GB"
+            ram: "12 GB"
+            tags: "NEW_ARRIVAL,FLAGSHIP,5G"

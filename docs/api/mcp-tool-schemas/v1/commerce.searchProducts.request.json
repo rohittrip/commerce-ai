@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "Search query text"
+    },
+    "filters": {
+      "type": "object",
+      "properties": {
+        "categories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Canonical category IDs to filter by"
+        },
+        "priceMin": {
+          "type": "number",
+          "minimum": 0
+        },
+        "priceMax": {
+          "type": "number",
+          "minimum": 0
+        },
+        "brands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "inStock": {
+          "type": "boolean"
+        },
+        "rating": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5
+        }
+      }
+    },
+    "pagination": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        }
+      }
+    },
+    "sortBy": {
+      "type": "string",
+      "enum": ["relevance", "price_asc", "price_desc", "rating", "newest"],
+      "default": "relevance"
+    }
+  },
+  "required": ["query"]
+}

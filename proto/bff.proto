@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package commerce.ai.bff;
+
+// BFF service: Orchestrator can call this when layers are separated (e.g. get cart, persist message).
+service Bff {
+  // Placeholder for future: e.g. GetCart, PersistChatMessage, etc.
+  rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  bool ok = 1;
+}

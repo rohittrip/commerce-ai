@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "ok": {
+      "type": "boolean"
+    },
+    "traceId": {
+      "type": "string"
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "products": {
+          "type": "array",
+          "items": {
+            "$ref": "./common.types.json#/definitions/ProductDetails"
+          }
+        },
+        "comparisonMatrix": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "description": "Key differences across products"
+        },
+        "recommendation": {
+          "type": "string",
+          "description": "AI recommendation based on comparison"
+        }
+      },
+      "required": ["products"]
+    },
+    "error": {
+      "$ref": "./common.types.json#/definitions/ToolError"
+    }
+  },
+  "required": ["ok", "traceId"]
+}

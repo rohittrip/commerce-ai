@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/Users/vikas/workspace/commerce-ai/scripts/manage-apps.sh:*)",
+      "Bash(lsof:*)"
+    ]
+  }
+}

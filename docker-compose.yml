@@ -1,0 +1,182 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: commerce-ai-postgres
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-commerce_ai}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/docker/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-commerce_ai}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: commerce-ai-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  mongo:
+    image: mongo:7
+    container_name: commerce-ai-mongo
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  tool-server:
+    build:
+      context: ./services-java
+      dockerfile: mcp-tool-server/Dockerfile
+    container_name: commerce-ai-tool-server
+    ports:
+      - "8081:8081"
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-commerce_ai}
+      DATABASE_USER: ${POSTGRES_USER:-postgres}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      SERVER_PORT: 8081
+      SPRING_MAIN_ALLOW_CIRCULAR_REFERENCES: "true"
+      SECURITY_ENABLED: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --spider http://localhost:8081/ || exit 0"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  orchestration:
+    build:
+      context: ./apps/orchestration-service
+      dockerfile: Dockerfile
+    container_name: commerce-ai-orchestration
+    ports:
+      - "3002:3001"
+      - "50051:50051"
+    environment:
+      ORCHESTRATOR_PORT: 3001
+      ORCHESTRATOR_GRPC_URL: 0.0.0.0:50051
+      NODE_DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-commerce_ai}
+      MONGODB_URI: mongodb://mongo:27017/commerce_ai_orchestrator
+      REDIS_URL: redis://redis:6379
+      MCP_TOOL_SERVER_URL: http://tool-server:8081
+      USE_MULTI_AGENT: "true"
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      tool-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+
+  bff:
+    build:
+      context: ./apps/bff-node
+      dockerfile: Dockerfile
+    container_name: commerce-ai-bff
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      NODE_DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-commerce_ai}
+      MONGODB_URI: mongodb://mongo:27017/commerce_ai_bff
+      REDIS_URL: redis://redis:6379
+      REDIS_KEY_PREFIX: bff
+      MCP_TOOL_SERVER_URL: http://tool-server:8081
+      ORCHESTRATOR_URL: http://orchestration:3001
+      ORCHESTRATOR_GRPC_URL: orchestration:50051
+      JWT_SECRET: ${JWT_SECRET:-commerce-ai-secret-key-change-in-production}
+      JWT_EXPIRES_IN: 7d
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      tool-server:
+        condition: service_healthy
+      orchestration:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+
+  admin-ui:
+    build:
+      context: ./apps/admin-ui
+      dockerfile: Dockerfile
+    container_name: commerce-ai-admin-ui
+    ports:
+      - "3001:80"
+    depends_on:
+      - bff
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  chat-ui:
+    build:
+      context: ./apps/chat-ui
+      dockerfile: Dockerfile
+    container_name: commerce-ai-chat-ui
+    ports:
+      - "5174:80"
+    depends_on:
+      - bff
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres-data:
+  redis-data:
+  mongo-data:
+
+networks:
+  default:
+    name: commerce-ai-network

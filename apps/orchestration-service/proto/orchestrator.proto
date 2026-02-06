@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package commerce.ai.orchestrator;
+
+service Orchestrator {
+  rpc ProcessMessage(ProcessMessageRequest) returns (stream ProcessChunk);
+  rpc TestTool(TestToolRequest) returns (TestToolResponse);
+}
+
+message ProcessMessageRequest {
+  string session_id = 1;
+  string user_id = 2;
+  string message = 3;
+  optional string trace_id = 4;
+}
+
+message ProcessChunk {
+  string json = 1;
+}
+
+message TestToolRequest {
+  string tool_name = 1;
+  string arguments_json = 2;
+  optional string trace_id = 3;
+}
+
+message TestToolResponse {
+  bool success = 1;
+  string result_json = 2;
+  optional string error = 3;
+}
