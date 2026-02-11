@@ -215,7 +215,41 @@ export class IntentService implements OnModuleInit {
       'browse', 'explore', 'display', 'list', 'get me', 'i need',
       'show', 'any', 'recommend', 'suggest', 'what about',
     ];
-    return this.matchesAnyPattern(text, patterns);
+    
+    // Check for explicit search patterns
+    if (this.matchesAnyPattern(text, patterns)) {
+      return true;
+    }
+    
+    // Check for product category + price filter pattern (e.g., "mobile under 20k", "laptop below 50000")
+    const hasPriceFilter = /(?:under|below|above|less than|more than|upto|up to|between|starting|from|max|min)\s*(?:rs\.?|inr|₹)?\s*\d+/i.test(text);
+    const hasCategory = this.resolveCategory(text) !== undefined;
+    
+    if (hasPriceFilter && hasCategory) {
+      return true;
+    }
+    
+    // Check for product category mentions (even without explicit search keywords)
+    // Common product categories that imply search
+    const productCategories = [
+      'mobile', 'phone', 'laptop', 'tv', 'television', 'camera', 'headphone',
+      'earphone', 'speaker', 'watch', 'tablet', 'computer', 'ac', 'fridge',
+      'refrigerator', 'washing machine', 'microwave', 'oven', 'fan', 'cooler',
+      'shoe', 'shirt', 'jeans', 'dress', 'bag', 'wallet', 'perfume',
+    ];
+    
+    const hasProductCategory = productCategories.some(cat => text.includes(cat));
+    if (hasProductCategory && hasPriceFilter) {
+      return true;
+    }
+    
+    // Check for brand mention + price filter
+    const hasBrand = this.extractBrands(text).length > 0;
+    if (hasBrand && hasPriceFilter) {
+      return true;
+    }
+    
+    return false;
   }
 
   private isCompareIntent(text: string): boolean {
@@ -561,6 +595,9 @@ export class IntentService implements OnModuleInit {
 
   private isVagueQuery(text: string): boolean {
     const words = text.split(/\s+/).filter(w => w.length > 2);
+    // Not vague if it has price filters
+    const hasPriceFilter = /(?:under|below|above|less than|more than|upto|up to|between|starting|from|max|min)\s*(?:rs\.?|inr|₹)?\s*\d+/i.test(text);
+    if (hasPriceFilter) return false;
     return words.length < 2;
   }
 
@@ -573,6 +610,11 @@ export class IntentService implements OnModuleInit {
     if (categoryId) confidence += 0.25;
     if (brands.length > 0) confidence += 0.15;
     if (text.length > 10) confidence += 0.1;
+    
+    // Higher confidence if there's a price filter
+    const hasPriceFilter = /(?:under|below|above|less than|more than|upto|up to|between|starting|from|max|min)\s*(?:rs\.?|inr|₹)?\s*\d+/i.test(text);
+    if (hasPriceFilter) confidence += 0.2;
+    
     return Math.min(confidence, 0.95);
   }
 

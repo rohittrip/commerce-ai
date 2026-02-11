@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, UseGuards, Request, Res } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Query, UseGuards, Request, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
 import { OptionalJwtAuthGuard } from '../../common/auth/optional-jwt-auth.guard';
@@ -49,9 +49,14 @@ export class ChatController {
   }
 
   @Get('sessions/:sessionId/messages')
-  @ApiOperation({ summary: 'Get chat history' })
-  async getMessages(@Param('sessionId') sessionId: string) {
-    return this.chatService.getMessages(sessionId);
+  @ApiOperation({ summary: 'Get chat history with pagination' })
+  async getMessages(
+    @Param('sessionId') sessionId: string,
+    @Query('limit') limit?: string,
+    @Query('before') before?: string,
+  ) {
+    const parsedLimit = limit ? parseInt(limit, 10) : 10;
+    return this.chatService.getMessages(sessionId, parsedLimit, before);
   }
 
   @Post('messages')

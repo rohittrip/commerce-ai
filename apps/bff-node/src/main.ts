@@ -5,13 +5,21 @@ import { AppModule } from './app.module';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import * as swaggerUi from 'swagger-ui-express';
+import cookieParser from 'cookie-parser';
 
 dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.enableCors();
+  // Enable cookie parser middleware
+  app.use(cookieParser());
+
+  // Enable CORS with credentials for cookie support
+  app.enableCors({
+    origin: true,
+    credentials: true,
+  });
   app.useGlobalPipes(new ValidationPipe({ transform: true }));
 
   const config = new DocumentBuilder()

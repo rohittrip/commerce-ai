@@ -133,18 +133,37 @@ export class ChatService {
     yield* this.orchestrator.processMessage(sessionId, effectiveUserId, message);
   }
 
-  async getMessages(sessionId: string) {
+  async getMessages(sessionId: string, limit: number = 10, before?: string) {
+    const query: any = { $or: [{ chat_session_id: sessionId }, { sessionId }, { session_id: sessionId }] };
+    
+    // If 'before' cursor is provided, fetch messages older than that timestamp
+    if (before) {
+      query.created_at = { $lt: new Date(before) };
+    }
+    
     const messages = await this.chatMessageModel
-      .find({ $or: [{ chat_session_id: sessionId }, { sessionId }, { session_id: sessionId }] })
-      .sort({ created_at: 1 })
+      .find(query)
+      .sort({ created_at: -1 }) // Sort descending to get latest first
+      .limit(limit + 1) // Fetch one extra to check if there are more
       .lean()
       .exec();
-    return messages.map((m: any) => ({
-      id: m.message_id ?? m._id?.toString(),
-      role: m.role,
-      content_text: m.content_text ?? m.text ?? m.content ?? '',
-      created_at: m.created_at,
-    }));
+    
+    const hasMore = messages.length > limit;
+    const resultMessages = hasMore ? messages.slice(0, limit) : messages;
+    
+    // Reverse to return in chronological order (oldest first)
+    const chronologicalMessages = resultMessages.reverse();
+    
+    return {
+      messages: chronologicalMessages.map((m: any) => ({
+        id: m.message_id ?? m._id?.toString(),
+        role: m.role,
+        content_text: m.content_text ?? m.text ?? m.content ?? '',
+        created_at: m.created_at,
+      })),
+      hasMore,
+      oldestTimestamp: chronologicalMessages.length > 0 ? chronologicalMessages[0].created_at : null,
+    };
   }
 
   async submitFeedback(sessionId: string, messageId: string, rating: number, reason?: string) {

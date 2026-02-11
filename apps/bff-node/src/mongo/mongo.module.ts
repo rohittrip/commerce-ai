@@ -11,6 +11,7 @@ import {
   MongoUserAddress,
   MongoUserAddressSchema,
 } from './schemas/user-address.schema';
+import { MongoOtpRequest, MongoOtpRequestSchema } from './schemas/otp-request.schema';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import {
       { name: MongoChatMessage.name, schema: MongoChatMessageSchema },
       { name: Cart.name, schema: CartSchema },
       { name: MongoUserAddress.name, schema: MongoUserAddressSchema },
+      { name: MongoOtpRequest.name, schema: MongoOtpRequestSchema },
     ]),
   ],
   exports: [
@@ -38,6 +40,7 @@ import {
       { name: MongoChatMessage.name, schema: MongoChatMessageSchema },
       { name: Cart.name, schema: CartSchema },
       { name: MongoUserAddress.name, schema: MongoUserAddressSchema },
+      { name: MongoOtpRequest.name, schema: MongoOtpRequestSchema },
     ]),
   ],
 })

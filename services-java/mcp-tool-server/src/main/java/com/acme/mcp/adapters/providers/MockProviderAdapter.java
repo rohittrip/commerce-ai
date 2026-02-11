@@ -559,7 +559,9 @@ public class MockProviderAdapter implements ProviderAdapter {
         product.setBrand(brand);
         product.setCategory(category);
         product.setPrice(new Money(salePrice, "INR"));
-        product.setImageUrl("https://cdn.example.com/products/" + id + ".jpg");
+        // Use placeholder image service with product name
+        String encodedName = name.length() > 20 ? name.substring(0, 20).replace(" ", "+") : name.replace(" ", "+");
+        product.setImageUrl("https://placehold.co/300x300/e2e8f0/475569?text=" + encodedName);
 
         // Set stock based on product type
         int stock = category.contains("mobile") || category.contains("laptop") ? 50 : 100;

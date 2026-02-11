@@ -22,20 +22,20 @@ export class MobileAuthService {
   ) {}
 
   /** Mock: always returns success. Replace with third-party OTP send later. */
-  async generateOtp(mobile: string): Promise<{ success: boolean; message: string }> {
+  async generateOtp(phoneCountry: string, phoneNumber: string): Promise<{ success: boolean; message: string }> {
     return {
       success: true,
-      message: `OTP sent. For mock, use last 4 digits of mobile or ${MOCK_OTP_FALLBACK} for testing.`,
+      message: `OTP sent. For mock, use last 4 digits of phone number or ${MOCK_OTP_FALLBACK} for testing.`,
     };
   }
 
   /**
-   * Mock OTP verification: valid if OTP equals last 4 digits of mobile, or fixed 1234.
+   * Mock OTP verification: valid if OTP equals last 4 digits of phoneNumber, or fixed 1234.
    * Replace with third-party verification later.
    */
-  private isOtpValid(mobile: string, otp: string): boolean {
+  private isOtpValid(phoneNumber: string, otp: string): boolean {
     if (otp === MOCK_OTP_FALLBACK) return true;
-    const last4 = mobile.slice(-4);
+    const last4 = phoneNumber.slice(-4);
     return last4.length === 4 && otp === last4;
   }
 
@@ -44,35 +44,34 @@ export class MobileAuthService {
    * optionally upgrade guest chat sessions to user sessions, return JWT + sessionId.
    */
   async validateOtp(
-    mobile: string,
+    phoneCountry: string,
+    phoneNumber: string,
     otp: string,
     guestId?: string,
   ): Promise<{
     accessToken: string;
     sessionId: string;
     userId: string;
-    mobile: string;
+    phoneCountry: string;
+    phoneNumber: string;
     upgradedChatSessionIds?: string[];
   }> {
-    if (!this.isOtpValid(mobile, otp)) {
+    if (!this.isOtpValid(phoneNumber, otp)) {
       throw new Error('Invalid OTP');
     }
 
-    const phone_country = '91';
-    const phone_number = mobile;
-    const mobileKey = `${phone_country}|${phone_number}`;
+    // Normalize country code (remove + if present)
+    const normalizedCountry = phoneCountry.replace(/^\+/, '');
+    const mobileKey = `${normalizedCountry}|${phoneNumber}`;
 
     let user = await this.userModel.findOne({ mobile: mobileKey }).exec();
     if (!user) {
-      user = await this.userModel.findOne({ phone_country, phone_number }).exec();
-    }
-    if (!user) {
-      user = await this.userModel.findOne({ mobile }).exec();
+      user = await this.userModel.findOne({ phone_country: normalizedCountry, phone_number: phoneNumber }).exec();
     }
     if (!user) {
       user = await this.userModel.create({
-        phone_country,
-        phone_number,
+        phone_country: normalizedCountry,
+        phone_number: phoneNumber,
         mobile: mobileKey,
         role: 'customer',
       });
@@ -115,7 +114,8 @@ export class MobileAuthService {
 
     const payload = {
       sub: userId,
-      mobile: mobileKey,
+      phoneCountry: normalizedCountry,
+      phoneNumber,
       role: (user as { role?: string }).role ?? 'customer',
     };
     const accessToken = this.jwtService.sign(payload, {
@@ -127,13 +127,15 @@ export class MobileAuthService {
       accessToken: string;
       sessionId: string;
       userId: string;
-      mobile: string;
+      phoneCountry: string;
+      phoneNumber: string;
       upgradedChatSessionIds?: string[];
     } = {
       accessToken,
       sessionId,
       userId,
-      mobile: mobileKey,
+      phoneCountry: normalizedCountry,
+      phoneNumber,
     };
     if (upgradedChatSessionIds.length > 0) {
       response.upgradedChatSessionIds = upgradedChatSessionIds;

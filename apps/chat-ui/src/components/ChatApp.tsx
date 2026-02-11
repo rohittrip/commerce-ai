@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
 import { useTheme } from '@mui/material/styles';
 import {
   addItemToCart,
@@ -25,6 +26,7 @@ import {
   getMessages,
   getSessions,
   login,
+  logout,
   removeCartItem,
   setAuthToken,
   streamChat,
@@ -35,10 +37,11 @@ import {
 interface OtpLoginData {
   accessToken: string;
   userId: string;
-  mobile: string;
-  upgradedChatSessionIds?: string[];
+  phoneCountry: string;
+  phoneNumber: string;
 }
 import type { Cart, ChatEvent, Order, ProductSummary } from '@/types';
+import AddressPanel from './AddressPanel';
 import AuthPanel from './AuthPanel';
 import CartDrawer from './CartDrawer';
 import MessageInput from './MessageInput';
@@ -77,6 +80,11 @@ const ChatApp = () => {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [isGuest, setIsGuest] = useState(true);
   
+  // Pagination state for chat history
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [oldestTimestamp, setOldestTimestamp] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  
   // Chat state
   const [items, setItems] = useState<ChatItem[]>([]);
   const [streaming, setStreaming] = useState(false);
@@ -86,20 +94,31 @@ const ChatApp = () => {
   // Cart state
   const [cart, setCart] = useState<Cart | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  
+  // Address state
+  const [addressDrawerOpen, setAddressDrawerOpen] = useState(false);
 
   const cartCount = cart?.itemCount ?? 0;
 
   // Auth handlers
   const persistAuth = useCallback((payload: { accessToken: string; user: { id: string; username: string; role: string } }) => {
-    localStorage.setItem(AUTH_KEY, JSON.stringify(payload));
-    setToken(payload.accessToken);
+    // Store user info (token is in HTTP-only cookie, managed by browser)
+    localStorage.setItem(AUTH_KEY, JSON.stringify({ user: payload.user, loggedIn: true }));
+    setToken('cookie-auth'); // Marker that user is authenticated via cookie
     setUser(payload.user);
-    setAuthToken(payload.accessToken);
+    // Don't set Authorization header - cookie is used instead
     setIsGuest(false);
     setShowLoginDialog(false);
   }, []);
 
-  const clearAuth = useCallback(() => {
+  const clearAuth = useCallback(async () => {
+    // Call logout API to clear cookie on server
+    try {
+      await logout();
+    } catch {
+      // Continue with client-side cleanup even if logout API fails
+    }
+    
     localStorage.removeItem(AUTH_KEY);
     localStorage.removeItem(SESSION_KEY);
     setToken(null);
@@ -122,11 +141,13 @@ const ChatApp = () => {
     }
     try {
       const parsed = JSON.parse(cached);
-      if (parsed?.accessToken) {
-        setToken(parsed.accessToken);
+      // Check for user info (token is in HTTP-only cookie)
+      if (parsed?.user && parsed?.loggedIn) {
+        setToken('cookie-auth'); // Marker that user is authenticated via cookie
         setUser(parsed.user);
-        setAuthToken(parsed.accessToken);
         setIsGuest(false);
+      } else {
+        setIsGuest(true);
       }
     } catch {
       localStorage.removeItem(AUTH_KEY);
@@ -135,9 +156,9 @@ const ChatApp = () => {
   }, []);
 
   // Session handlers
-  const loadSessions = useCallback(async () => {
+  const loadSessions = useCallback(async (authenticated: boolean = false) => {
     try {
-      const sessionList = await getSessions();
+      const sessionList = await getSessions(authenticated);
       setSessions(sessionList);
     } catch {
       // Ignore errors loading sessions
@@ -146,26 +167,56 @@ const ChatApp = () => {
 
   const loadSessionMessages = useCallback(async (sid: string) => {
     try {
-      const history = await getMessages(sid);
-      setItems(history.map(message => ({
+      const response = await getMessages(sid, 10);
+      setItems(response.messages.map(message => ({
         id: message.id,
         kind: 'message',
         role: message.role,
         content: message.content_text,
         createdAt: message.created_at,
       })));
+      setHasMoreMessages(response.hasMore);
+      setOldestTimestamp(response.oldestTimestamp);
     } catch {
       setItems([]);
+      setHasMoreMessages(false);
+      setOldestTimestamp(null);
     }
   }, []);
 
-  const hydrateSession = useCallback(async () => {
+  // Load more messages on scroll up
+  const loadMoreMessages = useCallback(async () => {
+    if (!sessionId || !hasMoreMessages || loadingMore || !oldestTimestamp) return;
+    
+    setLoadingMore(true);
+    try {
+      const response = await getMessages(sessionId, 10, oldestTimestamp);
+      const olderMessages = response.messages.map(message => ({
+        id: message.id,
+        kind: 'message' as const,
+        role: message.role as 'user' | 'assistant',
+        content: message.content_text,
+        createdAt: message.created_at,
+      }));
+      
+      // Prepend older messages to the beginning
+      setItems(prev => [...olderMessages, ...prev]);
+      setHasMoreMessages(response.hasMore);
+      setOldestTimestamp(response.oldestTimestamp);
+    } catch {
+      // Ignore errors when loading more
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [sessionId, hasMoreMessages, loadingMore, oldestTimestamp]);
+
+  const hydrateSession = useCallback(async (authenticated: boolean = false) => {
     const cachedSession = localStorage.getItem(SESSION_KEY);
     if (cachedSession) {
       setSessionId(cachedSession);
       await loadSessionMessages(cachedSession);
     }
-    await loadSessions();
+    await loadSessions(authenticated);
   }, [loadSessionMessages, loadSessions]);
 
   const handleNewSession = useCallback(async () => {
@@ -174,11 +225,13 @@ const ChatApp = () => {
       setSessionId(session.sessionId);
       localStorage.setItem(SESSION_KEY, session.sessionId);
       setItems([]); // Clear chat
-      await loadSessions(); // Refresh session list
+      setHasMoreMessages(false);
+      setOldestTimestamp(null);
+      await loadSessions(!isGuest); // Refresh session list
     } catch (err: any) {
       setError(err?.message || 'Failed to create session');
     }
-  }, [loadSessions]);
+  }, [loadSessions, isGuest]);
 
   const handleSelectSession = useCallback(async (sid: string) => {
     setSessionId(sid);
@@ -223,7 +276,10 @@ const ChatApp = () => {
   }, [hydrateAuth]);
 
   useEffect(() => {
-    hydrateSession();
+    // Check if user is authenticated based on cached auth
+    const cached = localStorage.getItem(AUTH_KEY);
+    const isAuth = cached ? JSON.parse(cached)?.loggedIn === true : false;
+    hydrateSession(isAuth);
   }, [hydrateSession]);
 
   useEffect(() => {
@@ -231,6 +287,18 @@ const ChatApp = () => {
       hydrateCart();
     }
   }, [hydrateCart, token]);
+
+  // Reload sessions when user logs in
+  useEffect(() => {
+    if (token && !isGuest) {
+      // User just logged in, reload sessions (authenticated)
+      loadSessions(true);
+      // If there's a current session, reload its messages
+      if (sessionId) {
+        loadSessionMessages(sessionId);
+      }
+    }
+  }, [token, isGuest]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Chat message handlers
   const appendAssistantToken = useCallback((tokenChunk: string) => {
@@ -328,7 +396,7 @@ const ChatApp = () => {
           activeSession = session.sessionId;
           setSessionId(activeSession);
           localStorage.setItem(SESSION_KEY, activeSession);
-          await loadSessions();
+          await loadSessions(!isGuest);
         } catch (err: any) {
           setError(err?.message || 'Failed to create session');
           return;
@@ -360,7 +428,7 @@ const ChatApp = () => {
         setStreaming(false);
       }
     },
-    [addChatItem, handleStreamEvent, finalizeStreamingMessage, loadSessions, sessionId, streaming, token],
+    [addChatItem, handleStreamEvent, finalizeStreamingMessage, isGuest, loadSessions, sessionId, streaming, token],
   );
 
   const handleLogin = useCallback(async (username: string, password: string) => {
@@ -374,24 +442,15 @@ const ChatApp = () => {
       accessToken: data.accessToken,
       user: {
         id: data.userId,
-        username: data.mobile,
+        username: `${data.phoneCountry}${data.phoneNumber}`,
         role: 'customer',
       },
     };
     persistAuth(payload);
     
-    // Log upgraded sessions (guest sessions that were converted to user sessions)
-    if (data.upgradedChatSessionIds && data.upgradedChatSessionIds.length > 0) {
-      console.log('Guest sessions upgraded to user sessions:', data.upgradedChatSessionIds);
-      // If current session was upgraded, it's now a user session
-      if (sessionId && data.upgradedChatSessionIds.includes(sessionId)) {
-        console.log('Current session was upgraded from guest to user session');
-      }
-    }
-    
-    // Refresh session list after login
-    loadSessions();
-  }, [persistAuth, sessionId, loadSessions]);
+    // Refresh session list after login (user is now authenticated)
+    loadSessions(true);
+  }, [persistAuth, loadSessions]);
 
   const handleAddToCart = useCallback(async (productId: string, provider: string) => {
     if (!token) {
@@ -490,6 +549,20 @@ const ChatApp = () => {
                 </IconButton>
               </Tooltip>
             )}
+            <Tooltip title="My Address">
+              <IconButton 
+                color="primary" 
+                onClick={() => {
+                  if (isGuest) {
+                    setShowLoginDialog(true);
+                  } else {
+                    setAddressDrawerOpen(true);
+                  }
+                }}
+              >
+                <LocationOnIcon />
+              </IconButton>
+            </Tooltip>
             <IconButton color="primary" onClick={() => setDrawerOpen(true)}>
               <Badge badgeContent={cartCount} color="secondary">
                 <ShoppingCartIcon />
@@ -533,7 +606,13 @@ const ChatApp = () => {
               )}
             </Box>
           ) : (
-            <MessageList items={items} onAddToCart={handleAddToCart} />
+            <MessageList 
+              items={items} 
+              onAddToCart={handleAddToCart}
+              hasMore={hasMoreMessages}
+              loadingMore={loadingMore}
+              onLoadMore={loadMoreMessages}
+            />
           )}
           <MessageInput onSend={handleSend} disabled={streaming} followups={latestFollowups} />
         </Container>
@@ -544,6 +623,13 @@ const ChatApp = () => {
           onClose={() => setDrawerOpen(false)}
           onUpdateItem={handleUpdateItem}
           onRemoveItem={handleRemoveItem}
+          anchor={isDesktop ? 'right' : 'bottom'}
+        />
+
+        {/* Address Panel */}
+        <AddressPanel
+          open={addressDrawerOpen}
+          onClose={() => setAddressDrawerOpen(false)}
           anchor={isDesktop ? 'right' : 'bottom'}
         />
 

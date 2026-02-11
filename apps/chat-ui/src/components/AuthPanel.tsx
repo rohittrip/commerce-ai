@@ -21,11 +21,11 @@ import PersonIcon from '@mui/icons-material/Person';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import CloseIcon from '@mui/icons-material/Close';
-import { generateOtp, validateOtp } from '@/api';
+import { requestOtp, verifyOtp, type OtpRequestResponse, type OtpVerifyResponse } from '@/api';
 
 interface AuthPanelProps {
   onLogin: (username: string, password: string) => Promise<void>;
-  onOtpLogin?: (data: { accessToken: string; userId: string; mobile: string; upgradedChatSessionIds?: string[] }) => void;
+  onOtpLogin?: (data: { accessToken: string; userId: string; phoneCountry: string; phoneNumber: string; upgradedChatSessionIds?: string[] }) => void;
   onCancel?: () => void;
 }
 
@@ -42,8 +42,10 @@ const AuthPanel = ({ onLogin, onOtpLogin, onCancel }: AuthPanelProps) => {
   const [showPassword, setShowPassword] = useState(false);
   
   // OTP login state
-  const [mobile, setMobile] = useState('');
+  const [phoneCountry, setPhoneCountry] = useState('+91');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [otp, setOtp] = useState('');
+  const [otpRequestId, setOtpRequestId] = useState<string | null>(null);
   const [otpStep, setOtpStep] = useState<OtpStep>('mobile');
   const [resendTimer, setResendTimer] = useState(0);
   
@@ -68,8 +70,8 @@ const AuthPanel = ({ onLogin, onOtpLogin, onCancel }: AuthPanelProps) => {
 
   // Handle OTP generation
   const handleGenerateOtp = async () => {
-    if (!mobile || mobile.length < 10) {
-      setError('Please enter a valid 10-digit mobile number');
+    if (!phoneNumber || phoneNumber.length < 10) {
+      setError('Please enter a valid 10-digit phone number');
       return;
     }
     
@@ -78,12 +80,14 @@ const AuthPanel = ({ onLogin, onOtpLogin, onCancel }: AuthPanelProps) => {
     setSuccess(null);
     
     try {
-      const result = await generateOtp(mobile);
-      if (result.success) {
+      const result = await requestOtp(phoneCountry, phoneNumber);
+      if (result.data?.otpRequestId) {
+        setOtpRequestId(result.data.otpRequestId);
         setOtpStep('otp');
-        setSuccess('OTP sent successfully! For testing, use 1234 or last 4 digits of mobile.');
-        // Start resend timer
-        setResendTimer(30);
+        setSuccess('OTP sent successfully! For testing, use 1234 or last 4 digits of phone number.');
+        // Start resend timer based on API response
+        const resendTime = result.data.resendAvailableInSec || 30;
+        setResendTimer(resendTime);
         const interval = setInterval(() => {
           setResendTimer(prev => {
             if (prev <= 1) {
@@ -94,10 +98,10 @@ const AuthPanel = ({ onLogin, onOtpLogin, onCancel }: AuthPanelProps) => {
           });
         }, 1000);
       } else {
-        setError(result.message || 'Failed to send OTP');
+        setError(result.error || 'Failed to send OTP');
       }
     } catch (err: any) {
-      setError(err?.response?.data?.message || err?.message || 'Failed to send OTP');
+      setError(err?.response?.data?.error || err?.message || 'Failed to send OTP');
     } finally {
       setLoading(false);
     }
@@ -111,37 +115,46 @@ const AuthPanel = ({ onLogin, onOtpLogin, onCancel }: AuthPanelProps) => {
       setError('Please enter a valid OTP');
       return;
     }
+
+    if (!otpRequestId) {
+      setError('OTP request expired. Please request a new OTP.');
+      return;
+    }
     
     setLoading(true);
     setError(null);
     
     try {
-      const result = await validateOtp(mobile, otp);
-      if (result.accessToken) {
+      const result = await verifyOtp(otpRequestId, otp);
+      // Token is now in HTTP-only cookie, check for user data instead
+      if (result.data?.user?.userId) {
         // Call the OTP login callback if provided, otherwise use regular onLogin flow
         if (onOtpLogin) {
           onOtpLogin({
-            accessToken: result.accessToken,
-            userId: result.userId,
-            mobile: result.mobile,
-            upgradedChatSessionIds: result.upgradedChatSessionIds,
+            accessToken: '', // Token is in HTTP-only cookie, not in response
+            userId: result.data.user.userId,
+            phoneCountry: result.data.user.phone.countryCode,
+            phoneNumber: result.data.user.phone.number,
           });
         } else {
           // Fallback: create a mock user object for compatibility
-          await onLogin(mobile, otp);
+          await onLogin(phoneNumber, otp);
         }
+      } else {
+        setError(result.error || 'Verification failed');
       }
     } catch (err: any) {
-      setError(err?.response?.data?.message || err?.message || 'Invalid OTP');
+      setError(err?.response?.data?.error || err?.message || 'Invalid OTP');
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle back to mobile input
+  // Handle back to phone input
   const handleBackToMobile = () => {
     setOtpStep('mobile');
     setOtp('');
+    setOtpRequestId(null);
     setError(null);
     setSuccess(null);
   };
@@ -219,16 +232,28 @@ const AuthPanel = ({ onLogin, onOtpLogin, onCancel }: AuthPanelProps) => {
                 {otpStep === 'mobile' ? (
                   <>
                     <TextField
-                      label="Mobile Number"
-                      value={mobile}
-                      onChange={e => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                      placeholder="Enter 10-digit mobile number"
+                      label="Phone Number"
+                      value={phoneNumber}
+                      onChange={e => setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      placeholder="Enter 10-digit phone number"
                       fullWidth
                       autoFocus
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
-                            <Typography color="text.secondary">+91</Typography>
+                            <TextField
+                              select
+                              value={phoneCountry}
+                              onChange={e => setPhoneCountry(e.target.value)}
+                              variant="standard"
+                              sx={{ width: 70, mr: 1 }}
+                              SelectProps={{ native: true }}
+                            >
+                              <option value="+91">+91</option>
+                              <option value="+1">+1</option>
+                              <option value="+44">+44</option>
+                              <option value="+61">+61</option>
+                            </TextField>
                           </InputAdornment>
                         ),
                       }}
@@ -239,7 +264,7 @@ const AuthPanel = ({ onLogin, onOtpLogin, onCancel }: AuthPanelProps) => {
                       variant="contained"
                       size="large"
                       fullWidth
-                      disabled={loading || mobile.length < 10}
+                      disabled={loading || phoneNumber.length < 10}
                       sx={{ py: 1.5 }}
                     >
                       {loading ? <CircularProgress size={24} /> : 'Send OTP'}
@@ -249,7 +274,7 @@ const AuthPanel = ({ onLogin, onOtpLogin, onCancel }: AuthPanelProps) => {
                   <>
                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                       <Typography variant="body2" color="text.secondary">
-                        OTP sent to +91 {mobile}
+                        OTP sent to {phoneCountry} {phoneNumber}
                       </Typography>
                       <Button size="small" onClick={handleBackToMobile} sx={{ ml: 'auto' }}>
                         Change
@@ -301,7 +326,7 @@ const AuthPanel = ({ onLogin, onOtpLogin, onCancel }: AuthPanelProps) => {
                   </Typography>
                 </Divider>
                 <Typography variant="body2" color="text.secondary" textAlign="center">
-                  Use any 10-digit mobile number. OTP: <strong>1234</strong> or last 4 digits of mobile.
+                  Use any 10-digit phone number. OTP: <strong>1234</strong> or last 4 digits of phone number.
                 </Typography>
               </Box>
             )}

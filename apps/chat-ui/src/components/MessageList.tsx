@@ -1,4 +1,5 @@
-import { Box, Divider, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, Divider, Typography } from '@mui/material';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import type { ProductSummary, Order } from '@/types';
 import MessageBubble from './MessageBubble';
 import ProductGrid from './ProductGrid';
@@ -22,9 +23,12 @@ type ChatItem =
 interface MessageListProps {
   items: ChatItem[];
   onAddToCart: (productId: string, provider: string) => void;
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
 }
 
-const MessageList = ({ items, onAddToCart }: MessageListProps) => {
+const MessageList = ({ items, onAddToCart, hasMore, loadingMore, onLoadMore }: MessageListProps) => {
   if (!items.length) {
     return (
       <Box sx={{ textAlign: 'center', color: 'text.secondary', py: 6 }}>
@@ -40,6 +44,20 @@ const MessageList = ({ items, onAddToCart }: MessageListProps) => {
 
   return (
     <Box sx={{ display: 'grid', gap: 2 }}>
+      {/* Load More Button at the top */}
+      {hasMore && onLoadMore && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
+          <Button
+            variant="text"
+            size="small"
+            onClick={onLoadMore}
+            disabled={loadingMore}
+            startIcon={loadingMore ? <CircularProgress size={16} /> : <KeyboardArrowUpIcon />}
+          >
+            {loadingMore ? 'Loading...' : 'Load older messages'}
+          </Button>
+        </Box>
+      )}
       {items.map(item => {
         switch (item.kind) {
           case 'message':

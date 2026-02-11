@@ -74,4 +74,33 @@ export class ConfigService {
   get orchestratorGrpcUrl(): string | undefined {
     return this.get<string>('ORCHESTRATOR_GRPC_URL') || undefined;
   }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // OTP Configuration
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /** OTP expiry time in seconds (default: 120 = 2 minutes) */
+  get otpExpiresInSec(): number {
+    return parseInt(this.get('OTP_EXPIRES_IN_SEC', '120'), 10);
+  }
+
+  /** OTP resend available time in seconds (default: 30 seconds) */
+  get otpResendAvailableInSec(): number {
+    return parseInt(this.get('OTP_RESEND_AVAILABLE_IN_SEC', '30'), 10);
+  }
+
+  /** Access token expiry in seconds (default: 3600 = 1 hour) */
+  get accessTokenExpiresInSec(): number {
+    return parseInt(this.get('ACCESS_TOKEN_EXPIRES_IN_SEC', '3600'), 10);
+  }
+
+  /** Refresh token expiry in seconds (default: 2592000 = 30 days) */
+  get refreshTokenExpiresInSec(): number {
+    return parseInt(this.get('REFRESH_TOKEN_EXPIRES_IN_SEC', '2592000'), 10);
+  }
+
+  /** Dummy OTP for testing (default: 1234) */
+  get dummyOtp(): string {
+    return this.get('DUMMY_OTP', '1234');
+  }
 }

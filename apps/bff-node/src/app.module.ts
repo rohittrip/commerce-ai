@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from './modules/auth/auth.module';
+import { OtpAuthModule } from './modules/otp-auth/otp-auth.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { CartModule } from './modules/cart/cart.module';
 import { ProductsModule } from './modules/products/products.module';
@@ -20,6 +21,7 @@ import { OrchestratorModule } from './orchestrator/orchestrator.module';
     MongoModule,
     OrchestratorModule,
     AuthModule,
+    OtpAuthModule,
     ChatModule,
     CartModule,
     ProductsModule,
