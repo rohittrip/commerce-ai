@@ -28,7 +28,7 @@ interface ProcessMessageOptions {
 
 @Injectable()
 export class OrchestratorService {
-  private readonly LLM_TIMEOUT = 60000; // 60 seconds
+  private readonly LLM_TIMEOUT = 120000; // 120 seconds - increased for stability
   private readonly MAX_RETRIES = 2;
 
   constructor(
@@ -119,11 +119,11 @@ export class OrchestratorService {
       let assistantMessage = '';
       let toolCalls: any[] = [];
 
+      const timeout = this.createTimeout(this.LLM_TIMEOUT);
       try {
         const llmStream = this.llmRouter.generateResponse(messages, tools);
-        const timeoutPromise = this.createTimeout(this.LLM_TIMEOUT);
 
-        for await (const chunk of this.raceWithTimeout(llmStream, timeoutPromise)) {
+        for await (const chunk of this.raceWithTimeout(llmStream, timeout.promise)) {
           if (chunk.type === 'token') {
             assistantMessage += chunk.content;
             yield { type: 'token', content: chunk.content };
@@ -138,11 +138,15 @@ export class OrchestratorService {
       } catch (error) {
         const debugMode = this.config.debugMode || this.config.nodeEnv === 'development';
         if (error.message === 'LLM_TIMEOUT') {
-          yield { type: 'error', error: sanitizeError(new Error('LLM response timed out'), debugMode, traceId) };
+          console.warn(`[${traceId}] LLM request timed out after ${this.LLM_TIMEOUT}ms`);
+          yield { type: 'error', error: sanitizeError(new Error('LLM response timed out. Please try again.'), debugMode, traceId) };
           yield { type: 'done' };
           return;
         }
         throw error;
+      } finally {
+        // Always cancel the timeout to prevent memory leaks
+        timeout.cancel();
       }
 
       // Execute tool calls with caching and circuit breaker
@@ -545,22 +549,48 @@ export class OrchestratorService {
     stream: AsyncGenerator<T>,
     timeoutPromise: Promise<never>,
   ): AsyncGenerator<T> {
-    let timeoutId: NodeJS.Timeout | null = null;
+    const iterator = stream[Symbol.asyncIterator]();
+    let timeoutOccurred = false;
+    
+    // Create a race wrapper for timeout
+    const timeoutRacer = timeoutPromise.catch((err) => {
+      timeoutOccurred = true;
+      throw err;
+    });
+
     try {
-      for await (const chunk of stream) {
-        yield chunk;
+      while (true) {
+        // Race between the next chunk and timeout
+        const nextPromise = iterator.next();
+        const result = await Promise.race([nextPromise, timeoutRacer]);
+        
+        if (result.done) {
+          break;
+        }
+        yield result.value;
       }
+    } catch (error) {
+      if (timeoutOccurred || error.message === 'LLM_TIMEOUT') {
+        throw new Error('LLM_TIMEOUT');
+      }
+      throw error;
     } finally {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
+      // Clean up the iterator if needed
+      if (iterator.return) {
+        await iterator.return(undefined).catch(() => {});
       }
     }
   }
 
-  private createTimeout(ms: number): Promise<never> {
-    return new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('LLM_TIMEOUT')), ms);
+  private createTimeout(ms: number): { promise: Promise<never>; cancel: () => void } {
+    let timeoutId: NodeJS.Timeout;
+    const promise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('LLM_TIMEOUT')), ms);
     });
+    return {
+      promise,
+      cancel: () => clearTimeout(timeoutId),
+    };
   }
 
   private async buildConversationHistory(
@@ -602,14 +632,37 @@ export class OrchestratorService {
   }
 
   private async saveMessage(sessionId: string, role: string, content: string, userId?: string) {
+    // Get the next sequence_id for this session
+    const lastMessage = await this.chatMessageModel
+      .findOne({ session_id: sessionId })
+      .sort({ sequence_id: -1 })
+      .select('sequence_id')
+      .lean()
+      .exec();
+    
+    const nextSequenceId = (lastMessage?.sequence_id ?? 0) + 1;
+
     await this.chatMessageModel.create({
       message_id: uuidv4(),
       session_id: sessionId,
       user_id: userId,
       role,
+      sequence_id: nextSequenceId,
       content_text: content,
       content_json: {},
     });
+  }
+
+  /**
+   * Ensure session exists in PostgreSQL (for foreign key constraints)
+   */
+  private async ensureSessionExists(sessionId: string, userId?: string) {
+    await this.db.query(
+      `INSERT INTO chat_sessions (id, user_id, created_at, updated_at)
+       VALUES ($1, $2, NOW(), NOW())
+       ON CONFLICT (id) DO NOTHING`,
+      [sessionId, userId || null],
+    );
   }
 
   private async saveToolCall(
@@ -623,6 +676,9 @@ export class OrchestratorService {
     cached: boolean = false,
     isInternal: boolean = false,
   ) {
+    // Ensure session exists in PostgreSQL before inserting tool call
+    await this.ensureSessionExists(sessionId);
+    
     await this.db.query(
       `INSERT INTO tool_calls (id, session_id, tool_name, request_json, response_json, success, trace_id, duration_ms, provider_id, cached, is_internal)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,

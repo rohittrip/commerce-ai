@@ -19,6 +19,9 @@ export class MongoChatMessage extends Document {
   @Prop({ required: true, enum: ['user', 'assistant', 'system', 'tool'] })
   role: string;
 
+  @Prop({ type: Number, default: 0 })
+  sequence_id: number;
+
   @Prop()
   content_text?: string;
 

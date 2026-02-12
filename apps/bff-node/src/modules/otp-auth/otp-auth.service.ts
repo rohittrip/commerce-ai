@@ -6,6 +6,7 @@ import { ConfigService } from '../../common/config/config.service';
 import { MongoUser } from '../../mongo/schemas/user.schema';
 import { Session } from '../../mongo/schemas/session.schema';
 import { MongoOtpRequest } from '../../mongo/schemas/otp-request.schema';
+import { MongoChatSession } from '../../mongo/schemas/chat-session.schema';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface OtpRequestParams {
@@ -40,6 +41,7 @@ export interface OtpVerifyResult {
     phone: { countryCode: string; number: string };
     isNewUser: boolean;
   };
+  upgradedChatSessionIds?: string[];
 }
 
 @Injectable()
@@ -48,6 +50,7 @@ export class OtpAuthService {
     @InjectModel(MongoUser.name) private userModel: Model<MongoUser>,
     @InjectModel(Session.name) private sessionModel: Model<Session>,
     @InjectModel(MongoOtpRequest.name) private otpRequestModel: Model<MongoOtpRequest>,
+    @InjectModel(MongoChatSession.name) private chatSessionModel: Model<MongoChatSession>,
     private jwtService: JwtService,
     private config: ConfigService,
   ) {}
@@ -211,7 +214,32 @@ export class OtpAuthService {
       expiresIn: this.config.refreshTokenExpiresInSec,
     });
 
-    return {
+    // Upgrade guest chat sessions to user sessions using deviceId
+    let upgradedChatSessionIds: string[] = [];
+    const guestId = device.deviceId;
+    if (guestId && guestId.trim()) {
+      const guestSessions = await this.chatSessionModel
+        .find({ guest_id: guestId.trim(), user_id: null })
+        .select('chat_session_id')
+        .lean()
+        .exec();
+      const ids = guestSessions.map((s) => (s as any).chat_session_id).filter(Boolean);
+      if (ids.length > 0) {
+        await this.chatSessionModel
+          .updateMany(
+            { guest_id: guestId.trim(), user_id: null },
+            { 
+              $set: { user_id: userId, session_type: 'CUSTOMER' }, 
+              $unset: { guest_id: 1, expires_at: 1 } // Remove guest_id and TTL
+            },
+          )
+          .exec();
+        upgradedChatSessionIds = ids;
+        console.log(`Upgraded ${ids.length} guest session(s) to user ${userId}:`, ids);
+      }
+    }
+
+    const result: OtpVerifyResult = {
       auth: {
         accessToken,
         expiresInSec: this.config.accessTokenExpiresInSec,
@@ -228,5 +256,11 @@ export class OtpAuthService {
         isNewUser,
       },
     };
+
+    if (upgradedChatSessionIds.length > 0) {
+      result.upgradedChatSessionIds = upgradedChatSessionIds;
+    }
+
+    return result;
   }
 }

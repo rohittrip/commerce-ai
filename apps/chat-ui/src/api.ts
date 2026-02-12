@@ -56,6 +56,7 @@ export interface OtpVerifyResponse {
       phone: { countryCode: string; number: string };
       isNewUser: boolean;
     };
+    upgradedChatSessionIds?: string[];
   };
   meta: { requestId: string };
   error: string | null;

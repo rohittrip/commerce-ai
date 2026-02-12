@@ -157,6 +157,7 @@ export class ChatService {
     return {
       messages: chronologicalMessages.map((m: any) => ({
         id: m.message_id ?? m._id?.toString(),
+        sequence_id: m.sequence_id ?? m.message_index ?? 0,
         role: m.role,
         content_text: m.content_text ?? m.text ?? m.content ?? '',
         created_at: m.created_at,
