@@ -97,6 +97,63 @@ export class OtpAuthService {
   }
 
   /**
+   * Get user info by userId - used for cookie validation
+   */
+  async getUserById(userId: string): Promise<{
+    userId: string;
+    name: string;
+    phone: { countryCode: string; number: string };
+    isNewUser: boolean;
+  } | null> {
+    const user = await this.userModel.findOne({ user_id: userId }).exec();
+    
+    if (!user) {
+      return null;
+    }
+
+    return {
+      userId: user.user_id,
+      name: user.full_name || '',
+      phone: {
+        countryCode: user.phone_country || '',
+        number: user.phone_number || '',
+      },
+      isNewUser: user.is_new_user === true,
+    };
+  }
+
+  /**
+   * Validate JWT token and return user info
+   */
+  async validateToken(token: string): Promise<{
+    user: {
+      userId: string;
+      name: string;
+      phone: { countryCode: string; number: string };
+      isNewUser: boolean;
+    };
+  } | null> {
+    try {
+      const payload = this.jwtService.verify(token, {
+        secret: this.config.jwtSecret,
+      });
+
+      if (payload.type !== 'access' || !payload.userId) {
+        return null;
+      }
+
+      const user = await this.getUserById(payload.userId);
+      if (!user) {
+        return null;
+      }
+
+      return { user };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Verify OTP - validates OTP and device, returns auth tokens and user info
    */
   async verifyOtp(params: OtpVerifyParams): Promise<OtpVerifyResult> {
@@ -170,11 +227,15 @@ export class OtpAuthService {
       });
       isNewUser = true;
     } else {
-      if (!user.is_phone_verified) {
+      // Existing user - check if this is their first successful login
+      isNewUser = user.is_new_user === true;
+      
+      // Update user: mark phone as verified and is_new_user as false after first login
+      if (!user.is_phone_verified || user.is_new_user) {
         user.is_phone_verified = true;
+        user.is_new_user = false; // After first successful login, user is no longer "new"
         await user.save();
       }
-      isNewUser = user.is_new_user;
     }
 
     const userId = user.user_id;

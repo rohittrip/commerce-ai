@@ -8,7 +8,7 @@ import { MongoChatMessage, MongoChatMessageSchema } from './schemas/chat-message
   imports: [
     MongooseModule.forRootAsync({
       useFactory: (config: ConfigService) => ({
-        uri: config.mongodbUri || 'mongodb://localhost:27017/commerce_ai_orchestrator',
+        uri: config.mongodbUri || 'mongodb://localhost:27017/commerce_ai',
       }),
       inject: [ConfigService],
     }),

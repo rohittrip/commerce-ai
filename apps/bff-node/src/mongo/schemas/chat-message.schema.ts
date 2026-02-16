@@ -13,9 +13,16 @@ export class MongoChatMessage extends Document {
   @Prop({ required: false, index: true })
   chat_session_id?: string;
 
+  /** Used by orchestration service */
+  @Prop({ index: true })
+  session_id?: string;
+
   /** Legacy: optional for backward compat with existing messages tied to auth sessionId. */
   @Prop({ index: true })
   sessionId?: string;
+
+  @Prop({ index: true })
+  user_id?: string;
 
   @Prop({ required: true, enum: ['user', 'assistant', 'system', 'tool'] })
   role: string;
@@ -26,8 +33,16 @@ export class MongoChatMessage extends Document {
   @Prop()
   text?: string;
 
+  /** Used by orchestration service */
+  @Prop()
+  content_text?: string;
+
   @Prop({ default: 0 })
   message_index: number;
+
+  /** Used by orchestration service */
+  @Prop({ type: Number, default: 0 })
+  sequence_id: number;
 
   @Prop({ maxlength: 100 })
   tool_name?: string;
@@ -38,9 +53,16 @@ export class MongoChatMessage extends Document {
   @Prop({ type: Object })
   metadata?: Record<string, unknown>;
 
+  /** Used by orchestration service */
+  @Prop({ type: Object })
+  content_json?: Record<string, unknown>;
+
   /** Legacy alias for text. */
   @Prop()
   content?: string;
+
+  @Prop()
+  trace_id?: string;
 
   created_at?: Date;
 }
@@ -48,3 +70,5 @@ export class MongoChatMessage extends Document {
 export const MongoChatMessageSchema = SchemaFactory.createForClass(MongoChatMessage);
 MongoChatMessageSchema.index({ chat_session_id: 1, created_at: 1 });
 MongoChatMessageSchema.index({ sessionId: 1, created_at: 1 });
+MongoChatMessageSchema.index({ session_id: 1, created_at: 1 });
+MongoChatMessageSchema.index({ user_id: 1, created_at: -1 });

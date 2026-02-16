@@ -171,3 +171,23 @@ export class OtpVerifyResponseDto {
   @ApiPropertyOptional({ nullable: true })
   error?: string | null;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Auth Me Response DTO
+// ─────────────────────────────────────────────────────────────────────────────
+
+export class AuthMeDataDto {
+  @ApiProperty({ type: UserResponseDto })
+  user: UserResponseDto;
+}
+
+export class AuthMeResponseDto {
+  @ApiProperty({ type: AuthMeDataDto, nullable: true })
+  data: AuthMeDataDto | null;
+
+  @ApiProperty({ type: MetaDto })
+  meta: MetaDto;
+
+  @ApiPropertyOptional({ nullable: true })
+  error: string | null;
+}

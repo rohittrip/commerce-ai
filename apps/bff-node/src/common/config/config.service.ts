@@ -62,7 +62,7 @@ export class ConfigService {
 
   /** MongoDB for mobile flow (sessions, chat, cart, addresses). */
   get mongodbUri(): string {
-    return this.get('MONGODB_URI', 'mongodb://localhost:27017/commerce_ai_bff');
+    return this.get('MONGODB_URI', 'mongodb://localhost:27017/commerce_ai');
   }
 
   /** Orchestrator HTTP URL (used when gRPC is not set). */

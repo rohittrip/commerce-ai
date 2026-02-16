@@ -150,20 +150,34 @@ export class OrchestratorService {
       }
 
       // Execute tool calls with caching and circuit breaker
+      // Collect tool results for saving as assistant message
+      const toolResults: any[] = [];
       for (const toolCall of toolCalls) {
-        yield* this.executeToolCall(
+        for await (const toolChunk of this.executeToolCall(
           sessionId,
           userId,
           toolCall,
           traceId,
           userContext,
           options.skipCache,
-        );
+        )) {
+          // Collect tool results
+          if (toolChunk.type === 'cards' || toolChunk.type === 'comparison' || 
+              toolChunk.type === 'product_details' || toolChunk.type === 'cart_updated' ||
+              toolChunk.type === 'tool_result') {
+            toolResults.push(toolChunk);
+          }
+          yield toolChunk;
+        }
       }
 
-      // Save assistant message
+      // Save assistant message - include tool results if no text response
       if (assistantMessage) {
         await this.saveMessage(sessionId, 'assistant', assistantMessage, userId);
+      } else if (toolResults.length > 0) {
+        // Save a summary of tool results as assistant message
+        const toolSummary = this.summarizeToolResults(toolResults);
+        await this.saveMessage(sessionId, 'assistant', toolSummary, userId, { toolResults });
       }
 
       // Update trace state
@@ -631,26 +645,57 @@ export class OrchestratorService {
     return messages;
   }
 
-  private async saveMessage(sessionId: string, role: string, content: string, userId?: string) {
-    // Get the next sequence_id for this session
-    const lastMessage = await this.chatMessageModel
-      .findOne({ session_id: sessionId })
-      .sort({ sequence_id: -1 })
-      .select('sequence_id')
-      .lean()
-      .exec();
-    
-    const nextSequenceId = (lastMessage?.sequence_id ?? 0) + 1;
+  private async saveMessage(sessionId: string, role: string, content: string, userId?: string, contentJson?: any) {
+    try {
+      // Get the next sequence_id for this session
+      const lastMessage = await this.chatMessageModel
+        .findOne({ session_id: sessionId })
+        .sort({ sequence_id: -1 })
+        .select('sequence_id')
+        .lean()
+        .exec();
+      
+      const nextSequenceId = (lastMessage?.sequence_id ?? 0) + 1;
 
-    await this.chatMessageModel.create({
-      message_id: uuidv4(),
-      session_id: sessionId,
-      user_id: userId,
-      role,
-      sequence_id: nextSequenceId,
-      content_text: content,
-      content_json: {},
-    });
+      await this.chatMessageModel.create({
+        message_id: uuidv4(),
+        session_id: sessionId,
+        user_id: userId,
+        role,
+        sequence_id: nextSequenceId,
+        content_text: content,
+        content_json: contentJson || {},
+      });
+    } catch (error) {
+      console.error(`[MongoDB] Failed to save message:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Summarize tool results for display as assistant message
+   */
+  private summarizeToolResults(toolResults: any[]): string {
+    const summaries: string[] = [];
+    
+    for (const result of toolResults) {
+      if (result.type === 'cards' && result.products) {
+        const count = result.products.length;
+        if (count > 0) {
+          summaries.push(`Found ${result.total || count} product(s) matching your search.`);
+        } else {
+          summaries.push('No products found matching your criteria.');
+        }
+      } else if (result.type === 'comparison') {
+        summaries.push(`Comparing ${result.products?.length || 0} products.`);
+      } else if (result.type === 'product_details') {
+        summaries.push(`Here are the details for ${result.product?.title || 'the product'}.`);
+      } else if (result.type === 'cart_updated') {
+        summaries.push('Your cart has been updated.');
+      }
+    }
+    
+    return summaries.length > 0 ? summaries.join(' ') : 'I processed your request.';
   }
 
   /**

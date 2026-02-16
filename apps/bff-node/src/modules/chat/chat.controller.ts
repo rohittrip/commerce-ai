@@ -1,10 +1,11 @@
-import { Controller, Post, Get, Body, Param, Query, UseGuards, Request, Res } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Query, UseGuards, Request, Res, HttpException, HttpStatus, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { Response } from 'express';
+import { Response, Request as ExpressRequest } from 'express';
 import { OptionalJwtAuthGuard } from '../../common/auth/optional-jwt-auth.guard';
 import { ConfigService } from '../../common/config/config.service';
 import { sanitizeError } from '../../common/utils/error-sanitizer';
 import { ChatService } from './chat.service';
+import { OtpAuthService } from '../otp-auth/otp-auth.service';
 
 @ApiTags('chat')
 @Controller('v1/chat')
@@ -14,6 +15,7 @@ export class ChatController {
   constructor(
     private chatService: ChatService,
     private config: ConfigService,
+    private otpAuthService: OtpAuthService,
   ) {}
 
   @Post('sessions')
@@ -49,18 +51,72 @@ export class ChatController {
   }
 
   @Get('sessions/:sessionId/messages')
-  @ApiOperation({ summary: 'Get chat history with pagination' })
+  @ApiOperation({ summary: 'Get chat history with pagination. Guest sessions are public, user sessions require auth.' })
   async getMessages(
     @Param('sessionId') sessionId: string,
     @Query('limit') limit?: string,
     @Query('before') before?: string,
+    @Req() req: ExpressRequest,
   ) {
+    // Get the session to check ownership
+    const session = await this.chatService.getSession(sessionId);
+    
+    if (!session) {
+      throw new HttpException(
+        { error: 'Session not found' },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    // If session belongs to a guest (has guest_id, no user_id) - allow access
+    if (session.guest_id && !session.user_id) {
+      const parsedLimit = limit ? parseInt(limit, 10) : 10;
+      return this.chatService.getMessages(sessionId, parsedLimit, before);
+    }
+
+    // Session belongs to a user - require authentication
+    // Try to get auth token from cookie or Authorization header
+    let authToken = req.cookies?.auth_token;
+    
+    if (!authToken) {
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith('Bearer ')) {
+        authToken = authHeader.substring(7);
+      }
+    }
+
+    if (!authToken) {
+      throw new HttpException(
+        { error: 'Authentication required' },
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+
+    // Validate token
+    const tokenResult = await this.otpAuthService.validateToken(authToken);
+    
+    if (!tokenResult) {
+      throw new HttpException(
+        { error: 'Invalid or expired token' },
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+
+    // Check if the authenticated user owns this session
+    if (session.user_id !== tokenResult.user.userId) {
+      throw new HttpException(
+        { error: 'Access denied - session belongs to another user' },
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    // User is authenticated and owns the session
     const parsedLimit = limit ? parseInt(limit, 10) : 10;
     return this.chatService.getMessages(sessionId, parsedLimit, before);
   }
 
   @Post('messages')
-  @ApiOperation({ summary: 'Stream chat messages (SSE)' })
+  @ApiOperation({ summary: 'Stream chat messages (SSE). Guest sessions are public, user sessions require auth.' })
   async streamMessages(
     @Request() req,
     @Body() body: { sessionId: string; message: string },
@@ -70,6 +126,53 @@ export class ChatController {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders();
+
+    // Helper to send SSE error and close
+    const sendError = (error: string) => {
+      res.write(`data: ${JSON.stringify({ type: 'error', error })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+      res.end();
+    };
+
+    // Get session to check ownership
+    const session = await this.chatService.getSession(body.sessionId);
+    
+    if (!session) {
+      sendError('Session not found');
+      return;
+    }
+
+    // If session belongs to a user (not guest), require authentication
+    if (session.user_id && !session.guest_id) {
+      // Try to get auth token from cookie or Authorization header
+      let authToken = req.cookies?.auth_token;
+      
+      if (!authToken) {
+        const authHeader = req.headers.authorization;
+        if (authHeader?.startsWith('Bearer ')) {
+          authToken = authHeader.substring(7);
+        }
+      }
+
+      if (!authToken) {
+        sendError('Authentication required');
+        return;
+      }
+
+      // Validate token
+      const tokenResult = await this.otpAuthService.validateToken(authToken);
+      
+      if (!tokenResult) {
+        sendError('Invalid or expired token');
+        return;
+      }
+
+      // Check if the authenticated user owns this session
+      if (session.user_id !== tokenResult.user.userId) {
+        sendError('Access denied - session belongs to another user');
+        return;
+      }
+    }
 
     let disconnected = false;
     let heartbeatInterval: NodeJS.Timeout | null = null;
@@ -95,7 +198,7 @@ export class ChatController {
       }, 15000);
 
       // Get userId from authenticated user or use session's guest_id
-      const userId = req.user?.userId || null;
+      const userId = req.user?.userId || session.user_id || null;
 
       // Process message stream
       for await (const event of this.chatService.processMessage(
@@ -106,10 +209,14 @@ export class ChatController {
         if (disconnected || res.writableEnded) {
           break;
         }
+        // Skip 'done' events from orchestrator - we'll send our own single 'done' at the end
+        if (event.type === 'done') {
+          continue;
+        }
         res.write(`data: ${JSON.stringify(event)}\n\n`);
       }
 
-      // Ensure done event is sent
+      // Send single 'done' event at the end
       if (!disconnected && !res.writableEnded) {
         res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
       }

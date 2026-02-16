@@ -160,6 +160,7 @@ export class ChatService {
         sequence_id: m.sequence_id ?? m.message_index ?? 0,
         role: m.role,
         content_text: m.content_text ?? m.text ?? m.content ?? '',
+        content_json: m.content_json || null,
         created_at: m.created_at,
       })),
       hasMore,
