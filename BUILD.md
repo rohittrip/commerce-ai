@@ -154,19 +154,20 @@ Use the same `DATABASE_URL` (or `NODE_DATABASE_URL`) as in your `.env`.
 
 ## 6. Run the project
 
-### Option A: Docker (recommended for full stack)
+### Option A: Docker
 
-From repo root:
+Build and run individual services using Docker. See [DOCKER.md](DOCKER.md) for detailed instructions.
 
 ```bash
-./setup.sh
+# Build images
+docker build -t commerce-ai-bff:latest -f apps/bff-node/Dockerfile .
+docker build -t commerce-ai-orchestration:latest -f apps/orchestration-service/Dockerfile .
+docker build -t commerce-ai-tool-server:latest -f services-java/mcp-tool-server/Dockerfile ./services-java
 ```
-
-This uses `docker-compose` to start PostgreSQL, Redis (if in compose), Tool Server, BFF, and Admin UI. See [INSTALL.md](INSTALL.md) and `docker-compose.yml` for ports and env vars.
 
 ### Option B: Run services manually
 
-Start in separate terminals (after DB and Redis are running):
+Start in separate terminals (ensure external DB services are configured):
 
 1. **MCP Tool Server** (port 8081):  
    `cd services-java/mcp-tool-server && ./mvnw spring-boot:run`  

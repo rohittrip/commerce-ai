@@ -89,29 +89,9 @@
 
 4. **Start Services**
 
-   **Option A – Run BFF and Orchestration as Node services (script)**  
-   Use this when you have Postgres, Redis, and Mongo running (e.g. only those in Docker):
-
-   ```bash
-   # Start only Postgres, Redis, Mongo (if using Docker)
-   docker compose up -d postgres redis mongo
-
-   # Start BFF (3000) and Orchestration (3001) in dev mode
-   ./scripts/run-node-services.sh start
-
-   # Check status
-   ./scripts/run-node-services.sh status
-
-   # View logs
-   ./scripts/run-node-services.sh logs          # both
-   ./scripts/run-node-services.sh logs bff      # BFF only
-   ./scripts/run-node-services.sh logs orch     # Orchestration only
-
-   # Stop
-   ./scripts/run-node-services.sh stop
-   ```
-
-   **Option B – Run each service in a separate terminal:**
+   Ensure PostgreSQL, Redis, and MongoDB are configured (external services or local).
+   
+   **Run each service in a separate terminal:**
    ```bash
    # 1. Orchestration Service (Port 3001)
    cd apps/orchestration-service && npm run dev

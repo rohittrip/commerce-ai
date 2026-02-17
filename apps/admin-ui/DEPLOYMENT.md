@@ -6,35 +6,7 @@ Complete guide for deploying, testing, and operating the Commerce AI Admin Panel
 
 ## Deployment Options
 
-### 1. Docker Compose (Recommended)
-
-**Complete Stack:**
-
-```bash
-# From project root
-docker-compose up --build
-
-# Services available:
-# - Admin UI:    http://localhost:3001
-# - BFF API:     http://localhost:3000
-# - Tool Server: http://localhost:8081
-```
-
-**Admin UI Only:**
-
-```bash
-docker-compose up --build admin-ui
-```
-
-**Production Mode:**
-
-```bash
-docker-compose up -d --build
-docker-compose ps
-docker-compose logs -f admin-ui
-```
-
-### 2. Standalone Docker
+### 1. Docker
 
 **Build:**
 
@@ -472,10 +444,7 @@ readinessProbe:
 **View Logs:**
 
 ```bash
-# Docker Compose
-docker-compose logs -f admin-ui
-
-# Docker standalone
+# Docker
 docker logs -f admin-ui
 
 # Kubernetes
@@ -513,12 +482,6 @@ Integrate with:
 ## Scaling
 
 ### Horizontal Scaling
-
-**Docker Compose:**
-
-```bash
-docker-compose up --scale admin-ui=3
-```
 
 **Kubernetes:**
 
@@ -591,8 +554,9 @@ docker logs admin-ui
 # - Build failed
 
 # Solution:
-docker-compose down
-docker-compose up --build
+docker stop admin-ui && docker rm admin-ui
+docker build -t commerce-ai-admin:latest .
+docker run -d -p 3001:80 --name admin-ui commerce-ai-admin:latest
 ```
 
 **502 Bad Gateway:**
@@ -605,7 +569,7 @@ curl http://localhost:3000/api
 docker exec admin-ui nginx -t
 
 # Restart container
-docker-compose restart admin-ui
+docker restart admin-ui
 ```
 
 **Static Files Not Found:**
@@ -615,7 +579,7 @@ docker-compose restart admin-ui
 docker exec admin-ui ls -la /usr/share/nginx/html
 
 # Rebuild if missing
-docker-compose up --build admin-ui
+docker build -t commerce-ai-admin:latest . && docker restart admin-ui
 ```
 
 ### Performance Issues
@@ -648,7 +612,7 @@ Solutions:
 tar -czf admin-ui-backup-$(date +%Y%m%d).tar.gz \
   .env \
   nginx.conf \
-  docker-compose.yml
+  Dockerfile
 ```
 
 ### Disaster Recovery
@@ -674,11 +638,12 @@ tar -czf admin-ui-backup-$(date +%Y%m%d).tar.gz \
 docker tag commerce-ai-admin:latest commerce-ai-admin:backup
 
 # Deploy new version
-docker-compose up -d admin-ui
+docker stop admin-ui && docker rm admin-ui
+docker run -d -p 3001:80 --name admin-ui commerce-ai-admin:latest
 
 # Rollback if needed
 docker tag commerce-ai-admin:backup commerce-ai-admin:latest
-docker-compose up -d admin-ui
+docker restart admin-ui
 ```
 
 ### Kubernetes
@@ -730,17 +695,18 @@ kubectl rollout undo deployment/admin-ui --to-revision=2
 
 ```bash
 # Check status
-docker-compose ps
+docker ps | grep admin-ui
 
 # View logs
-docker-compose logs -f admin-ui
+docker logs -f admin-ui
 
 # Restart
-docker-compose restart admin-ui
+docker restart admin-ui
 
 # Full reset
-docker-compose down -v
-docker-compose up --build
+docker stop admin-ui && docker rm admin-ui
+docker build -t commerce-ai-admin:latest .
+docker run -d -p 3001:80 --name admin-ui commerce-ai-admin:latest
 ```
 
 ---

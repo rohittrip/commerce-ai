@@ -12,11 +12,15 @@ Comprehensive web-based administration interface featuring real-time monitoring,
 
 ## Quick Start
 
-### Option 1: Docker (Recommended)
+### Option 1: Docker
 
 ```bash
-# From project root
-docker-compose up --build
+# Build image
+cd apps/admin-ui
+docker build -t commerce-ai-admin:latest .
+
+# Run container
+docker run -d -p 3001:80 commerce-ai-admin:latest
 
 # Access admin panel
 open http://localhost:3001
@@ -29,8 +33,7 @@ Password: admin
 ### Option 2: Development Mode
 
 ```bash
-# Ensure backend is running
-docker-compose up -d postgres redis tool-server bff
+# Ensure backend services are configured (PostgreSQL, Redis, MongoDB)
 
 # Install and start admin UI
 cd apps/admin-ui
@@ -462,14 +465,14 @@ For production, set to actual BFF URL.
 - Verify credentials: admin / admin
 - Check BFF is running: `curl http://localhost:3000/api`
 - Check user role is "admin" in database
-- View BFF logs: `docker-compose logs bff`
+- View BFF logs in the terminal running the service
 
 ### Cannot Load Data
 
 **Issue:** Red error messages, "Failed to load data"
 
 **Solutions:**
-- Verify BFF is running: `docker-compose ps`
+- Verify BFF is running on port 3000
 - Check API connectivity: `curl http://localhost:3000/v1/admin/dashboard/stats`
 - Check JWT token is valid
 - Hard refresh: Ctrl+Shift+R
@@ -559,7 +562,7 @@ When adding new features:
 
 **Resources:**
 - API Docs: http://localhost:3000/api
-- BFF Logs: `docker-compose logs bff`
+- BFF Logs: Terminal running the service
 - UI Logs: Browser console (F12)
 
 **Quick Links:**

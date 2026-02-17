@@ -103,7 +103,7 @@ cmd_start() {
   start_bff
   start_orch
   info "Node services running. BFF: http://localhost:3000  Orchestrator: http://localhost:3001"
-  info "Ensure Postgres, Redis, and Mongo are running (e.g. docker compose up -d postgres redis mongo)."
+  info "Ensure Postgres, Redis, and Mongo are configured and running."
 }
 
 cmd_stop() {
