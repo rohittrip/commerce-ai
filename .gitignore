@@ -51,3 +51,7 @@ services-java/**/target/
 
 # Prisma
 prisma/*.db
+
+# Documentation files (local only)
+*.md
+**/*.md
